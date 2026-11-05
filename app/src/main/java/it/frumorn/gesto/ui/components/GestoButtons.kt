@@ -9,6 +9,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -112,7 +113,7 @@ fun GestoIconButton(
     }
     IconButton(
         onClick = onClick,
-        modifier = modifier.size(IconTarget).then(border),
+        modifier = modifier.minimumInteractiveComponentSize().size(IconTarget).then(border),
         enabled = enabled,
         shape = shape,
         content = content,
