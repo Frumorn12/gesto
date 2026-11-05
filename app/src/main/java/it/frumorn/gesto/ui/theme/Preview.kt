@@ -11,15 +11,14 @@ import androidx.compose.ui.Modifier
 /**
  * Shared scaffold for `@Preview` functions.
  *
- * Dynamic colour is switched off so previews render the deterministic fallback palette instead of
- * whatever wallpaper the preview device reports.
+ * The mode is forced so previews are deterministic.
  */
 @Composable
 fun GestoPreviewSurface(
     darkTheme: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    GestoTheme(darkTheme = darkTheme, dynamicColor = false) {
+    GestoTheme(mode = if (darkTheme) ThemeMode.Dark else ThemeMode.Light) {
         Surface(color = MaterialTheme.colorScheme.background) {
             Box(
                 Modifier

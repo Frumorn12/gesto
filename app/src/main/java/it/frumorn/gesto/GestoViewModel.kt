@@ -31,6 +31,7 @@ import it.frumorn.gesto.core.screen.RemoteScreenSessionEvent
 import it.frumorn.gesto.core.screen.RemoteScreenSessionMachine
 import it.frumorn.gesto.core.storage.SettingsRepository
 import it.frumorn.gesto.core.storage.TrustedHostStore
+import it.frumorn.gesto.ui.theme.ThemeMode
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -71,6 +72,8 @@ data class GestoUiState(
     val status: String = "Ready",
     val error: String? = null,
     val haptics: Boolean = true,
+    val themeMode: ThemeMode = ThemeMode.System,
+    val roundedCorners: Boolean = false,
     val remoteInputSessionActive: Boolean = false,
     val remoteGestureMode: RemoteGestureMode = RemoteGestureMode.Idle,
     val remotePointerCount: Int = 0,
@@ -150,6 +153,16 @@ class GestoViewModel(
         viewModelScope.launch {
             settingsRepo.haptics.collect { haptics ->
                 _state.update { it.copy(haptics = haptics) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.themeMode.collect { mode ->
+                _state.update { it.copy(themeMode = mode) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.roundedCorners.collect { rounded ->
+                _state.update { it.copy(roundedCorners = rounded) }
             }
         }
         viewModelScope.launch {
@@ -401,6 +414,16 @@ class GestoViewModel(
 
     fun setManualPort(value: String) {
         _state.update { it.copy(manualPort = value.filter(Char::isDigit).take(5)) }
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        _state.update { it.copy(themeMode = mode) }
+        viewModelScope.launch { settingsRepo.saveThemeMode(mode) }
+    }
+
+    fun setRoundedCorners(enabled: Boolean) {
+        _state.update { it.copy(roundedCorners = enabled) }
+        viewModelScope.launch { settingsRepo.saveRoundedCorners(enabled) }
     }
 
     fun toggleHaptics() {

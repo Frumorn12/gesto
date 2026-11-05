@@ -11,7 +11,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -19,7 +18,6 @@ import it.frumorn.gesto.Screen
 import it.frumorn.gesto.GestoUiState
 import it.frumorn.gesto.GestoViewModel
 import it.frumorn.gesto.core.model.ConnectionState
-import it.frumorn.gesto.ui.components.AtmosphericBackground
 import it.frumorn.gesto.ui.components.GestoNavigationBar
 import it.frumorn.gesto.ui.components.GestoTopBar
 import it.frumorn.gesto.ui.navigation.ScreensCapturingExternalPointer
@@ -40,6 +38,7 @@ import it.frumorn.gesto.ui.system.ExternalPointerCaptureEffect
 import it.frumorn.gesto.ui.system.FullscreenSystemUiEffect
 import it.frumorn.gesto.ui.system.RemoteScreenOrientationEffect
 import it.frumorn.gesto.ui.theme.GestoTheme
+import it.frumorn.gesto.ui.theme.ThemeMode
 
 /**
  * Root of the Gesto UI: the only composable that knows about [GestoViewModel].
@@ -52,7 +51,7 @@ import it.frumorn.gesto.ui.theme.GestoTheme
 fun GestoApp(viewModel: GestoViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val actions = rememberGestoActions(viewModel)
-    GestoTheme {
+    GestoTheme(mode = state.themeMode, roundedCorners = state.roundedCorners) {
         GestoAppShell(
             state = state,
             actions = actions,
@@ -96,21 +95,11 @@ internal fun GestoAppShell(
     Box(
         modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.surfaceContainerLow,
-                        MaterialTheme.colorScheme.background,
-                    )
-                )
-            )
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        if (!remoteFullscreen) AtmosphericBackground()
         Scaffold(
-            // The container is transparent so the gradient and the atmospheric wash show through;
-            // contentColorFor(Transparent) is Unspecified, which would leave unstyled Text black,
-            // so the content colour has to be provided explicitly.
+            // Transparent so the Box background shows through; contentColorFor(Transparent) is
+            // Unspecified, so the content colour is provided explicitly.
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground,
             topBar = {
@@ -164,7 +153,7 @@ internal fun GestoAppShell(
 @Preview(name = "Shell - onboarding - dark", widthDp = 412, heightDp = 900)
 @Composable
 private fun GestoAppShellPreviewDark() {
-    GestoTheme(darkTheme = true, dynamicColor = false) {
+    GestoTheme(mode = ThemeMode.Dark) {
         GestoAppShell(state = GestoUiState(), actions = GestoActions())
     }
 }
@@ -172,7 +161,7 @@ private fun GestoAppShellPreviewDark() {
 @Preview(name = "Shell - connected - light", widthDp = 412, heightDp = 900)
 @Composable
 private fun GestoAppShellPreviewLight() {
-    GestoTheme(darkTheme = false, dynamicColor = false) {
+    GestoTheme(mode = ThemeMode.Light) {
         GestoAppShell(
             state = GestoUiState(
                 screen = Screen.Controls,

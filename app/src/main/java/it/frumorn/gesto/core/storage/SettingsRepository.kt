@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import it.frumorn.gesto.core.model.StreamProfile
 import it.frumorn.gesto.core.model.StreamSettings
+import it.frumorn.gesto.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -24,6 +25,8 @@ class SettingsRepository(private val context: Context) {
         val SHOW_STATS = booleanPreferencesKey("show_stats")
         val HAPTICS = booleanPreferencesKey("haptics")
         val GAME_MODE = booleanPreferencesKey("game_mode")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val ROUNDED_CORNERS = booleanPreferencesKey("rounded_corners")
         val FIRST_RUN = booleanPreferencesKey("first_run")
     }
 
@@ -48,6 +51,19 @@ class SettingsRepository(private val context: Context) {
 
     val haptics: Flow<Boolean> = context.dataStore.data.map { it[Keys.HAPTICS] ?: true }
     val gameMode: Flow<Boolean> = context.dataStore.data.map { it[Keys.GAME_MODE] ?: false }
+
+    val themeMode: Flow<ThemeMode> = context.dataStore.data.map { prefs ->
+        ThemeMode.entries.find { it.name == prefs[Keys.THEME_MODE] } ?: ThemeMode.System
+    }
+    val roundedCorners: Flow<Boolean> = context.dataStore.data.map { it[Keys.ROUNDED_CORNERS] ?: false }
+
+    suspend fun saveThemeMode(mode: ThemeMode) {
+        context.dataStore.edit { prefs -> prefs[Keys.THEME_MODE] = mode.name }
+    }
+
+    suspend fun saveRoundedCorners(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.ROUNDED_CORNERS] = enabled }
+    }
 
     suspend fun saveStreamSettings(settings: StreamSettings) {
         context.dataStore.edit { prefs ->

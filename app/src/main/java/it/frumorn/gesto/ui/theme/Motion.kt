@@ -1,54 +1,30 @@
 package it.frumorn.gesto.ui.theme
 
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.spring
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.staticCompositionLocalOf
 
 /**
- * Material 3 Expressive motion scheme, reimplemented on public APIs.
- *
- * material3 1.4.0 ships `MotionScheme` and `MaterialExpressiveTheme`, but both are `internal` in
- * that release, so they cannot be referenced from application code. The spring constants below are
- * the exact values of `androidx.compose.material3.tokens.ExpressiveMotionTokens`, which gives the
- * same feel through `androidx.compose.animation.core.spring`.
- *
- * *Spatial* springs move things (position, size, corner radius) and are deliberately slightly
- * under-damped so motion overshoots; *effects* springs change non-spatial properties (colour,
- * alpha) and are critically damped so they never overshoot.
+ * Gesto motion: Ecomic easings and durations, plus the spring helpers older screens still use
+ * (spring constants follow the Material 3 expressive motion scheme, which is internal in 1.4.0).
  */
-@Immutable
-class GestoMotion {
-    fun <T> defaultSpatial(): FiniteAnimationSpec<T> =
-        spring(dampingRatio = DEFAULT_SPATIAL_DAMPING, stiffness = DEFAULT_SPATIAL_STIFFNESS)
+object GestoMotion {
+    val Enter: Easing = CubicBezierEasing(0.2f, 0.7f, 0.2f, 1f)
+    val Exit: Easing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
 
-    fun <T> fastSpatial(): FiniteAnimationSpec<T> =
-        spring(dampingRatio = FAST_SPATIAL_DAMPING, stiffness = FAST_SPATIAL_STIFFNESS)
+    const val ENTER_MS = 320
+    const val EXIT_MS = 190
+    const val MENU_MS = 320
+    const val SHEET_MS = 350
+    const val PULSE_MS = 1800
+    const val WRITE_MS = 1300
+    const val ENTER_OFFSET_DP = 10
 
-    fun <T> slowSpatial(): FiniteAnimationSpec<T> =
-        spring(dampingRatio = SLOW_SPATIAL_DAMPING, stiffness = SLOW_SPATIAL_STIFFNESS)
-
-    fun <T> defaultEffects(): FiniteAnimationSpec<T> =
-        spring(dampingRatio = EFFECTS_DAMPING, stiffness = DEFAULT_EFFECTS_STIFFNESS)
-
-    fun <T> fastEffects(): FiniteAnimationSpec<T> =
-        spring(dampingRatio = EFFECTS_DAMPING, stiffness = FAST_EFFECTS_STIFFNESS)
-
-    fun <T> slowEffects(): FiniteAnimationSpec<T> =
-        spring(dampingRatio = EFFECTS_DAMPING, stiffness = SLOW_EFFECTS_STIFFNESS)
-
-    private companion object {
-        const val DEFAULT_SPATIAL_DAMPING = 0.8f
-        const val DEFAULT_SPATIAL_STIFFNESS = 380f
-        const val FAST_SPATIAL_DAMPING = 0.6f
-        const val FAST_SPATIAL_STIFFNESS = 800f
-        const val SLOW_SPATIAL_DAMPING = 0.8f
-        const val SLOW_SPATIAL_STIFFNESS = 200f
-        const val EFFECTS_DAMPING = 1.0f
-        const val DEFAULT_EFFECTS_STIFFNESS = 1600f
-        const val FAST_EFFECTS_STIFFNESS = 3800f
-        const val SLOW_EFFECTS_STIFFNESS = 800f
-    }
+    fun <T> defaultSpatial(): FiniteAnimationSpec<T> = spring(dampingRatio = 0.8f, stiffness = 380f)
+    fun <T> fastSpatial(): FiniteAnimationSpec<T> = spring(dampingRatio = 0.6f, stiffness = 800f)
+    fun <T> slowSpatial(): FiniteAnimationSpec<T> = spring(dampingRatio = 0.8f, stiffness = 200f)
+    fun <T> defaultEffects(): FiniteAnimationSpec<T> = spring(dampingRatio = 1f, stiffness = 1600f)
+    fun <T> fastEffects(): FiniteAnimationSpec<T> = spring(dampingRatio = 1f, stiffness = 3800f)
+    fun <T> slowEffects(): FiniteAnimationSpec<T> = spring(dampingRatio = 1f, stiffness = 800f)
 }
-
-val LocalGestoMotion = staticCompositionLocalOf { GestoMotion() }

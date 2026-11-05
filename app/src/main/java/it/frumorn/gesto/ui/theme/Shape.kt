@@ -7,37 +7,51 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
 
-/**
- * Material 3 shape scale, pushed towards the rounder end of the expressive range.
- *
- * `Shapes.largeIncreased` / `extraLargeIncreased` / `extraExtraLarge` exist in material3 1.4.0 but
- * are `internal`, so the extra expressive steps are provided by [GestoExtraShapes] instead.
- */
-val GestoShapes: Shapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(18.dp),
-    large = RoundedCornerShape(26.dp),
-    extraLarge = RoundedCornerShape(34.dp),
+/** Preset "spigolo" (default): every corner 2 dp. */
+val ShapesSpigolo = Shapes(
+    extraSmall = RoundedCornerShape(2.dp),
+    small = RoundedCornerShape(2.dp),
+    medium = RoundedCornerShape(2.dp),
+    large = RoundedCornerShape(2.dp),
+    extraLarge = RoundedCornerShape(2.dp),
 )
 
-/** Shape tokens that have no slot in the standard Material 3 [Shapes] scale. */
+/** Preset "arrotondato", the same scale as Tratto. */
+val ShapesArrotondato = Shapes(
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(28.dp),
+)
+
+/** Shape tokens that have no slot in the standard Material 3 [Shapes] scale; they follow the preset. */
 @Immutable
 data class GestoExtraShapes(
-    /** Fully rounded, for status pills and badges. */
-    val pill: Shape = RoundedCornerShape(percent = 50),
-    /** The touchpad slab and the windowed remote display. */
-    val slab: Shape = RoundedCornerShape(34.dp),
-    /** Remote display when windowed. */
-    val viewport: Shape = RoundedCornerShape(18.dp),
+    val pill: Shape,
+    val slab: Shape,
+    val viewport: Shape,
     /** Remote display when fullscreen: edge to edge, no corner. */
     val viewportFullscreen: Shape = RoundedCornerShape(0.dp),
-    /** Floating overlays drawn on top of the video output. */
-    val overlay: Shape = RoundedCornerShape(14.dp),
-    /** Compact overlays (stats HUD, debug HUD). */
-    val overlayCompact: Shape = RoundedCornerShape(10.dp),
-    /** The drag handle revealed in game mode. */
+    val overlay: Shape,
+    val overlayCompact: Shape,
     val handle: Shape = RoundedCornerShape(2.dp),
 )
 
-val LocalGestoExtraShapes = staticCompositionLocalOf { GestoExtraShapes() }
+val GestoExtraShapesSpigolo = GestoExtraShapes(
+    pill = RoundedCornerShape(2.dp),
+    slab = RoundedCornerShape(2.dp),
+    viewport = RoundedCornerShape(2.dp),
+    overlay = RoundedCornerShape(2.dp),
+    overlayCompact = RoundedCornerShape(2.dp),
+)
+
+val GestoExtraShapesArrotondato = GestoExtraShapes(
+    pill = RoundedCornerShape(percent = 50),
+    slab = RoundedCornerShape(28.dp),
+    viewport = RoundedCornerShape(14.dp),
+    overlay = RoundedCornerShape(14.dp),
+    overlayCompact = RoundedCornerShape(10.dp),
+)
+
+val LocalGestoExtraShapes = staticCompositionLocalOf { GestoExtraShapesSpigolo }
