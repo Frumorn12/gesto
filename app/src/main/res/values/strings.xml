@@ -1,4 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Gesto</string>
+
+    <string name="notice_reconnected">Connection restored</string>
+
+    <string name="error_pc_refused">The PC is not answering on port %1$d. Check that Gesto is running on it.</string>
+    <string name="error_pc_timeout">The PC took too long to answer.</string>
+    <string name="error_pc_unreachable">This PC can\'t be reached from this network.</string>
+    <string name="error_fingerprint_changed">This PC\'s identity changed. Forget it and pair again.</string>
+    <string name="error_code_wrong">The code is wrong or expired.</string>
+    <string name="error_too_many_attempts">Too many attempts. Wait a minute and try again.</string>
+    <string name="error_public_pairing">This PC only accepts new phones on the home network.</string>
+    <string name="error_rejected_on_pc">Pairing was declined on the PC.</string>
+    <string name="error_no_answer">Nobody answered on the PC.</string>
+    <string name="error_approval_unavailable">This PC can\'t show the request. Use the code instead.</string>
+    <string name="error_pairing_busy">The PC is already answering another phone. Try again in a moment.</string>
+    <string name="error_unknown_app">That app is no longer set up on the PC.</string>
+    <string name="error_session_expired">This phone is no longer paired with the PC. Pair it again.</string>
+    <string name="error_connection_lost">Lost the connection to %1$s.</string>
+    <string name="error_generic">Something went wrong: %1$s</string>
 </resources>

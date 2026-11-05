@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Gesto</string>
+
+    <string name="notice_reconnected">Connessione ripristinata</string>
+
+    <string name="error_pc_refused">Il PC non risponde sulla porta %1$d. Controlla che Gesto sia acceso.</string>
+    <string name="error_pc_timeout">Il PC ci ha messo troppo a rispondere.</string>
+    <string name="error_pc_unreachable">Da questa rete il PC non si raggiunge.</string>
+    <string name="error_fingerprint_changed">L\'identità di questo PC è cambiata. Dimenticalo e accoppialo di nuovo.</string>
+    <string name="error_code_wrong">Il codice è sbagliato o scaduto.</string>
+    <string name="error_too_many_attempts">Troppi tentativi. Aspetta un minuto e riprova.</string>
+    <string name="error_public_pairing">Questo PC accetta nuovi telefoni solo dalla rete di casa.</string>
+    <string name="error_rejected_on_pc">Il collegamento è stato rifiutato sul PC.</string>
+    <string name="error_no_answer">Nessuno ha risposto sul PC.</string>
+    <string name="error_approval_unavailable">Questo PC non può mostrare la richiesta. Usa il codice.</string>
+    <string name="error_pairing_busy">Il PC sta già rispondendo a un altro telefono. Riprova tra poco.</string>
+    <string name="error_unknown_app">Quell\'app non è più configurata sul PC.</string>
+    <string name="error_session_expired">Questo telefono non è più accoppiato con il PC. Accoppialo di nuovo.</string>
+    <string name="error_connection_lost">Connessione con %1$s persa.</string>
+    <string name="error_generic">Qualcosa non ha funzionato: %1$s</string>
+</resources>

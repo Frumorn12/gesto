@@ -242,7 +242,7 @@ class GestoClient {
                 if (oneWayResponseIds.remove(responseId)) {
                     if (!response.getBoolean("ok")) {
                         val error = response.getJSONObject("error")
-                        throw IllegalStateException(error.getString("message"))
+                        throw error.toApiException()
                     }
                     continue
                 }
@@ -250,13 +250,19 @@ class GestoClient {
             }
             if (!response.getBoolean("ok")) {
                 val error = response.getJSONObject("error")
-                throw IllegalStateException(error.getString("message"))
+                throw error.toApiException()
             }
             oneWayResponseIds.remove(responseId)
             return response
         }
     }
 }
+
+private fun JSONObject.toApiException() = GestoApiException(
+    code = optString("code").ifBlank { "unknown" },
+    message = optString("message"),
+    retryable = optBoolean("retryable", false),
+)
 
 private fun JSONObject?.toCapabilitySummary(): CapabilitySummary {
     if (this == null) return CapabilitySummary()

@@ -8,6 +8,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import it.frumorn.gesto.ui.text.resolve
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -50,6 +56,14 @@ import it.frumorn.gesto.ui.theme.ThemeMode
 @Composable
 fun GestoApp(viewModel: GestoViewModel) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val noticeContext = LocalContext.current
+    LaunchedEffect(viewModel) {
+        // Resolved with the context here, not stringResource, because this runs outside composition.
+        viewModel.notices.collect { notice ->
+            snackbarHostState.showSnackbar(notice.text.resolve(noticeContext))
+        }
+    }
     val actions = rememberGestoActions(viewModel)
     GestoTheme(mode = state.themeMode, roundedCorners = state.roundedCorners) {
         GestoAppShell(
@@ -57,6 +71,7 @@ fun GestoApp(viewModel: GestoViewModel) {
             actions = actions,
             // The ViewModel stops here: the shell receives a slot, not the session.
             videoSurface = { RemoteDisplayVideoSurface(viewModel.videoSession.renderer) },
+            snackbarHostState = snackbarHostState,
         )
     }
 }
@@ -73,6 +88,7 @@ internal fun GestoAppShell(
     actions: GestoActions,
     modifier: Modifier = Modifier,
     videoSurface: @Composable () -> Unit = {},
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val remoteFullscreen = state.screen == Screen.RemoteDisplay && state.remoteScreenFullscreen
     val externalPointerCapture = state.connectionState == ConnectionState.Connected &&
@@ -102,6 +118,7 @@ internal fun GestoAppShell(
             // Unspecified, so the content colour is provided explicitly.
             containerColor = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onBackground,
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 if (!remoteFullscreen) {
                     GestoTopBar(state.toShellState(), actions.onOpenSettings)

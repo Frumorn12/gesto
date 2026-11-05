@@ -9,11 +9,15 @@ import androidx.lifecycle.viewModelScope
 import it.frumorn.gesto.core.externalinput.ExternalInputDeviceClass
 import it.frumorn.gesto.core.externalinput.ExternalInputDeviceSummary
 import it.frumorn.gesto.core.externalinput.ExternalInputEvent
+import it.frumorn.gesto.core.errors.ErrorContext
+import it.frumorn.gesto.core.errors.ErrorTranslator
 import it.frumorn.gesto.core.input.RemoteGestureMode
 import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.CapabilitySummary
 import it.frumorn.gesto.core.model.ConnectionState
 import it.frumorn.gesto.core.model.DiscoveredHost
+import it.frumorn.gesto.core.model.Notice
+import it.frumorn.gesto.core.model.NoticeAction
 import it.frumorn.gesto.core.model.PointerButton
 import it.frumorn.gesto.core.model.RemoteScreenConnectionState
 import it.frumorn.gesto.core.model.ScreenSource
@@ -24,16 +28,27 @@ import it.frumorn.gesto.core.model.StreamSettings
 import it.frumorn.gesto.core.model.TrustedHost
 import it.frumorn.gesto.core.model.formatFps
 import it.frumorn.gesto.core.video.RemoteScreenVideoSession
+import it.frumorn.gesto.core.network.GestoApiException
 import it.frumorn.gesto.core.network.GestoClient
 import it.frumorn.gesto.core.network.GestoDiscovery
 import it.frumorn.gesto.core.network.GestoInvite
 import it.frumorn.gesto.core.screen.RemoteScreenSessionEvent
 import it.frumorn.gesto.core.screen.RemoteScreenSessionMachine
+import it.frumorn.gesto.core.session.ReconnectPolicy
+import it.frumorn.gesto.ui.text.UiText
 import it.frumorn.gesto.core.storage.SettingsRepository
 import it.frumorn.gesto.core.storage.TrustedHostStore
 import it.frumorn.gesto.ui.theme.ThemeMode
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -100,6 +115,10 @@ data class GestoUiState(
     val screenStreamStats: ScreenStreamStats = ScreenStreamStats(),
     val screenStatus: String = "Screen stream idle",
     val screenError: String? = null,
+    /** True while a lost connection is being re-established in the background. */
+    val reconnecting: Boolean = false,
+    /** Round-trip time of the last health ping, null when unknown. */
+    val latencyMs: Int? = null,
 )
 
 class GestoViewModel(
@@ -115,6 +134,10 @@ class GestoViewModel(
         const val INTERACTION_KEEPALIVE_INTERVAL_MS = 5_000L
         const val SCREEN_STREAM_MAX_RETRIES = 3
         const val EXTERNAL_UNSUPPORTED_NOTICE_MS = 2_000L
+        const val HEALTH_PING_INTERVAL_MS = 5_000L
+        const val HEALTH_PING_IDLE_MS = 1_000L
+        const val HEALTH_PING_MAX_FAILURES = 2
+        const val NOTICE_DEDUPE_MS = 3_000L
     }
 
     private val discovery = GestoDiscovery(application)
@@ -141,9 +164,19 @@ class GestoViewModel(
     )
     val state: StateFlow<GestoUiState> = _state
 
+    private val _notices = MutableSharedFlow<Notice>(extraBufferCapacity = 8)
+    /** One-shot messages for the user (shown as a snackbar). */
+    val notices: SharedFlow<Notice> = _notices.asSharedFlow()
+    private val reconnectPolicy = ReconnectPolicy()
+    private var reconnectJob: Deferred<Boolean>? = null
+    private var lastInputAtMs = 0L
+    private var lastNoticeText: UiText? = null
+    private var lastNoticeAtMs = 0L
+
     init {
         observeVideoSession()
         viewModelScope.launch { drainInputCommands() }
+        viewModelScope.launch { runHealthPing() }
         viewModelScope.launch {
             settingsRepo.streamSettings.collect { settings ->
                 Log.i(TAG, "settings_loaded profile=${settings.profile} fps=${settings.maxFps} quality=${settings.jpegQuality} dimension=${settings.maxDimension}")
@@ -522,7 +555,7 @@ class GestoViewModel(
                         )
                     }
                 }
-                .onFailure { fail("Discovery failed", it) }
+                .onFailure { fail("Discovery failed", it, ErrorContext.Connecting) }
         }
     }
 
@@ -589,7 +622,7 @@ class GestoViewModel(
                     )
                 }
                 publishCurrentExternalDevices()
-            }.onFailure { fail("Pairing failed", it) }
+            }.onFailure { fail("Pairing failed", it, ErrorContext.Pairing) }
         }
     }
 
@@ -638,10 +671,12 @@ class GestoViewModel(
         }
         if (sawPolicyRejection) {
             return Result.failure(
-                IllegalStateException(
-                    "Remote pairing blocked by host policy. " +
+                GestoApiException(
+                    code = "public_pairing_denied",
+                    message = "Remote pairing blocked by host policy. " +
                         "The host admin must set allow_public_pairing=true or require_private_lan=false " +
                         "in ~/.config/waypad-daemon/config.json, then restart the daemon.",
+                    retryable = false,
                 ),
             )
         }
@@ -671,12 +706,15 @@ class GestoViewModel(
                     }
                     publishCurrentExternalDevices()
                 }
-                .onFailure { fail("Connection failed", it) }
+                .onFailure { fail("Connection failed", it, ErrorContext.Connecting) }
         }
     }
 
-    fun disconnect() {
-        Log.i(TAG, "connection_state=disconnected user_requested=true")
+    fun disconnect() = performDisconnect(cancelReconnect = true)
+
+    private fun performDisconnect(cancelReconnect: Boolean) {
+        Log.i(TAG, "connection_state=disconnected user_requested=$cancelReconnect")
+        if (cancelReconnect) reconnectJob?.cancel()
         stopScreenStream()
         interactionKeepAliveJob?.cancel()
         interactionEndJob?.cancel()
@@ -689,6 +727,8 @@ class GestoViewModel(
                 connectedHost = null,
                 screen = Screen.Discovery,
                 status = "Disconnected",
+                reconnecting = false,
+                latencyMs = null,
                 remoteInputSessionActive = false,
                 remoteGestureMode = RemoteGestureMode.Idle,
                 remotePointerCount = 0,
@@ -1172,17 +1212,13 @@ class GestoViewModel(
     private fun launchCommand(status: String?, block: suspend () -> Unit) {
         if (status != null) _state.update { it.copy(status = status, error = null) }
         viewModelScope.launch {
-            runCatching { block() }
-                .onSuccess { if (status != null) _state.update { it.copy(status = "Ready") } }
-                .onFailure { throwable ->
-                    if (throwable.isTransportFailure() && reconnectCurrentHost()) {
-                        runCatching { block() }
-                            .onSuccess { _state.update { it.copy(status = "Connection restored", error = null) } }
-                            .onFailure { fail("Command failed", it) }
-                    } else {
-                        fail("Command failed", throwable)
-                    }
+            val result = runCatching { block() }
+                .recoverCatching { throwable ->
+                    if (throwable is CancellationException) throw throwable
+                    if (throwable.isTransportFailure() && reconnectCurrentHost()) block() else throw throwable
                 }
+            if (status != null) _state.update { it.copy(status = "Ready") }
+            result.onFailure { reportCommandFailure(it) }
         }
     }
 
@@ -1190,47 +1226,152 @@ class GestoViewModel(
         viewModelScope.launch {
             runCatching { block() }
                 .onFailure { throwable ->
+                    if (throwable is CancellationException) throw throwable
                     if (throwable.isTransportFailure()) {
                         Log.w(TAG, "transport_failure quiet_command reconnecting=true", throwable)
                         reconnectCurrentHost()
                     } else {
-                        fail("Input failed", throwable)
+                        reportCommandFailure(throwable)
                     }
                 }
         }
     }
 
-    private suspend fun reconnectCurrentHost(): Boolean {
-        val host = _state.value.connectedHost ?: return false
-        Log.i(TAG, "connection_state=reconnecting host=${host.hostName}")
-        return runCatching {
-            val capabilities = client.connect(host)
-            Log.i(TAG, "connection_state=reconnected host=${host.hostName} input_backend=${capabilities.inputBackend}")
-            savedStateHandle["connectedHostId"] = host.id
-            _state.update {
-                it.copy(
-                    capabilities = capabilities,
-                    connectionState = ConnectionState.Connected,
-                    status = "Reconnected to ${host.hostName}",
-                    error = null,
-                )
-            }
-            publishCurrentExternalDevices()
-        }.isSuccess
+    /** A failed command never touches the connection state: the user just gets a message. */
+    private fun reportCommandFailure(throwable: Throwable) {
+        if (throwable is CancellationException) return
+        Log.w(TAG, "command_failed", throwable)
+        emitNotice(Notice(ErrorTranslator.translate(throwable, ErrorContext.Command, currentPort())))
     }
 
-    private fun fail(prefix: String, throwable: Throwable) {
+    private fun currentPort(): Int = _state.value.connectedHost?.port ?: 47771
+
+    /** Emits a notice, skipping an identical one that was just shown (e.g. per-keystroke failures). */
+    private fun emitNotice(notice: Notice) {
+        val now = System.currentTimeMillis()
+        if (notice.text == lastNoticeText && now - lastNoticeAtMs < NOTICE_DEDUPE_MS) return
+        lastNoticeText = notice.text
+        lastNoticeAtMs = now
+        _notices.tryEmit(notice)
+    }
+
+    private fun resolve(text: UiText): String = when (text) {
+        is UiText.Raw -> text.text
+        is UiText.Res -> getApplication<Application>().getString(text.id, *text.args.toTypedArray())
+    }
+
+    /**
+     * Re-establishes the session after a transport failure, silently, within the policy's budget.
+     * Concurrent callers share one attempt. Returns true when the session is back.
+     */
+    private suspend fun reconnectCurrentHost(): Boolean {
+        if (_state.value.connectedHost == null) return false
+        val job = reconnectJob?.takeIf { it.isActive }
+            ?: viewModelScope.async { runReconnectLoop() }.also { reconnectJob = it }
+        return try {
+            job.await()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            false
+        }
+    }
+
+    private suspend fun runReconnectLoop(): Boolean {
+        val host = _state.value.connectedHost ?: return false
+        Log.i(TAG, "connection_state=reconnecting host=${host.hostName}")
+        _state.update { it.copy(reconnecting = true) }
+        val startedAt = System.nanoTime()
+        var attempt = 0
+        var lastError: Throwable? = null
+        while (true) {
+            val elapsed = (System.nanoTime() - startedAt) / 1_000_000
+            val wait = reconnectPolicy.nextDelay(attempt, elapsed) ?: break
+            if (wait > 0) delay(wait)
+            val result = runCatching { client.connect(host) }
+            val capabilities = result.getOrNull()
+            if (capabilities != null) {
+                Log.i(TAG, "connection_state=reconnected host=${host.hostName} input_backend=${capabilities.inputBackend}")
+                savedStateHandle["connectedHostId"] = host.id
+                _state.update {
+                    it.copy(
+                        capabilities = capabilities,
+                        connectionState = ConnectionState.Connected,
+                        status = "Reconnected to ${host.hostName}",
+                        error = null,
+                        reconnecting = false,
+                    )
+                }
+                publishCurrentExternalDevices()
+                emitNotice(Notice(UiText.Res(R.string.notice_reconnected)))
+                return true
+            }
+            val failure = result.exceptionOrNull()!!
+            if (failure is CancellationException) throw failure
+            lastError = failure
+            Log.w(TAG, "reconnect_attempt_failed attempt=$attempt", failure)
+            if (!failure.isTransportFailure()) break
+            attempt++
+        }
+        // Gave up: back to the list, with a message that says why.
+        val text = lastError
+            ?.takeIf { it is GestoApiException || it.message?.contains("fingerprint", ignoreCase = true) == true }
+            ?.let { ErrorTranslator.translate(it, ErrorContext.Connecting, host.port) }
+            ?: UiText.Res(R.string.error_connection_lost, listOf(host.hostName))
+        performDisconnect(cancelReconnect = false)
+        emitNotice(Notice(text, NoticeAction.Retry))
+        return false
+    }
+
+    /** Pings the PC every few seconds while connected and idle; two misses in a row mean a dead link. */
+    private suspend fun runHealthPing() {
+        var failures = 0
+        while (true) {
+            delay(HEALTH_PING_INTERVAL_MS)
+            val s = _state.value
+            val idle = System.currentTimeMillis() - lastInputAtMs >= HEALTH_PING_IDLE_MS
+            if (s.connectionState != ConnectionState.Connected || s.connectedHost == null || s.reconnecting || !idle) {
+                failures = 0
+                continue
+            }
+            val startedAt = System.nanoTime()
+            val result = runCatching { client.ping() }
+            if (result.exceptionOrNull() is CancellationException) throw result.exceptionOrNull()!!
+            if (result.isSuccess) {
+                failures = 0
+                val ms = ((System.nanoTime() - startedAt) / 1_000_000).toInt()
+                _state.update { it.copy(latencyMs = ms) }
+            } else if (++failures >= HEALTH_PING_MAX_FAILURES) {
+                Log.w(TAG, "health_ping_failed count=$failures", result.exceptionOrNull())
+                failures = 0
+                _state.update { it.copy(latencyMs = null) }
+                reconnectCurrentHost()
+            }
+        }
+    }
+
+    /**
+     * Pairing and first-connection failures only. With a host already connected a failure is never
+     * allowed to park the session in [ConnectionState.Error]: the user gets a notice instead.
+     */
+    private fun fail(prefix: String, throwable: Throwable, context: ErrorContext) {
         Log.e(TAG, "connection_state=error prefix=$prefix", throwable)
+        val text = ErrorTranslator.translate(throwable, context, currentPort())
+        if (_state.value.connectedHost != null) {
+            emitNotice(Notice(text))
+            return
+        }
         _state.update {
             it.copy(
                 connectionState = ConnectionState.Error,
                 status = prefix,
-                error = throwable.message ?: throwable::class.java.simpleName,
+                error = resolve(text),
             )
         }
+        emitNotice(Notice(text))
     }
 
     private fun enqueueInput(command: RemoteInputCommand) {
+        lastInputAtMs = System.currentTimeMillis()
         val current = _state.value
         if (current.connectedHost == null || current.connectionState == ConnectionState.Disconnected) {
             Log.d(TAG, "input_queue_drop_disconnected command=$command")
@@ -1475,14 +1616,15 @@ class GestoViewModel(
     }
 
     private suspend fun sendInput(label: String, block: suspend () -> Unit) {
+        lastInputAtMs = System.currentTimeMillis()
         runCatching { block() }
             .onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
                 Log.w(TAG, "transport_send_failed type=$label", throwable)
                 if (throwable.isTransportFailure() && reconnectCurrentHost()) {
-                    runCatching { block() }
-                        .onFailure { fail("Input failed", it) }
-                } else {
-                    fail("Input failed", throwable)
+                    runCatching { block() }.onFailure { reportCommandFailure(it) }
+                } else if (!throwable.isTransportFailure()) {
+                    reportCommandFailure(throwable)
                 }
             }
     }
@@ -1604,8 +1746,11 @@ private fun Throwable.isTransportFailure(): Boolean {
         .mapNotNull { it.message }
         .joinToString(" ")
         .lowercase()
-    return "broken pipe" in text ||
+    val io = generateSequence(this) { it.cause }.any { it is java.io.IOException }
+    return io ||
+        "broken pipe" in text ||
         "connection reset" in text ||
         "connection closed" in text ||
-        "socket closed" in text
+        "socket closed" in text ||
+        "not connected" in text
 }
