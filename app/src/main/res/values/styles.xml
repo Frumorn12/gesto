@@ -6,7 +6,7 @@
         background follows the platform (and, on Android 12+, the dynamic wallpaper palette)
         instead of being pinned to the old brand black.
     -->
-    <style name="Theme.Waypad" parent="android:style/Theme.DeviceDefault.Light.NoActionBar">
+    <style name="Theme.Gesto" parent="android:style/Theme.DeviceDefault.Light.NoActionBar">
         <item name="android:windowBackground">?android:attr/colorBackground</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

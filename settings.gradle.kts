@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Waypad"
+rootProject.name = "Gesto"
 include(":app")
