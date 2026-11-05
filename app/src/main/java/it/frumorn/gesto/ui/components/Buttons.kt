@@ -1,8 +1,5 @@
 package it.frumorn.gesto.ui.components
 
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,51 +7,32 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import it.frumorn.gesto.ui.theme.GestoPreviewSurface
 import it.frumorn.gesto.ui.theme.GestoTheme
 
-/**
- * Oversized tonal button used for the mouse-button row under the touchpad.
- *
- * Material 3 Expressive's shape-morphing button API (`ButtonShapes` / `MaterialShapes`) is not part
- * of material3 1.4.0, so the press morph is reproduced by animating the corner radius with the
- * expressive spring scheme in [GestoTheme.motion].
- */
+/** Oversized tonal button used for the mouse-button row under the touchpad. */
 @Composable
 fun ClickButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val corner by animateDpAsState(
-        targetValue = if (pressed) GestoTheme.spacing.xl else GestoTheme.spacing.section,
-        animationSpec = GestoTheme.motion.fastSpatial<Dp>(),
-        label = "click-button-corner",
-    )
     FilledTonalButton(
         onClick = onClick,
         modifier = modifier.height(GestoTheme.spacing.clickButtonHeight),
-        shape = RoundedCornerShape(corner),
-        interactionSource = interactionSource,
+        shape = MaterialTheme.shapes.extraSmall,
     ) {
-        Text(label)
+        Text(label, style = MaterialTheme.typography.labelLarge)
     }
 }
 
 /** Equal-width outlined action inside a [ControlGroup] row. */
 @Composable
 fun RowScope.ActionButton(label: String, onClick: () -> Unit) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.weight(1f)) { Text(label) }
+    GestoOutlinedButton(label, onClick, Modifier.weight(1f))
 }
 
 /** Titled card grouping related host actions, badged with host support for that group. */
@@ -94,7 +72,7 @@ fun ShortcutGrid(items: List<Pair<String, () -> Unit>>, modifier: Modifier = Mod
                 horizontalArrangement = Arrangement.spacedBy(GestoTheme.spacing.md),
             ) {
                 row.forEach { (label, action) ->
-                    OutlinedButton(onClick = action, modifier = Modifier.weight(1f)) { Text(label) }
+                    GestoOutlinedButton(label, action, Modifier.weight(1f))
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }

@@ -2,32 +2,23 @@
 
 package it.frumorn.gesto.ui.components
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import it.frumorn.gesto.R
 import it.frumorn.gesto.ui.state.ShellUiState
 import it.frumorn.gesto.ui.theme.GestoPreviewSurface
 import it.frumorn.gesto.ui.theme.GestoTheme
@@ -42,23 +33,6 @@ fun SectionHeader(title: String, subtitle: String, modifier: Modifier = Modifier
             subtitle,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-/** The Gesto logotype cut-out. */
-@Composable
-fun BrandMark(modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .size(GestoTheme.spacing.brandMarkSize)
-            .clip(MaterialTheme.shapes.small),
-    ) {
-        Image(
-            painter = painterResource(R.drawable.waypad_brand_cutout),
-            contentDescription = "Gesto",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit,
         )
     }
 }
@@ -81,7 +55,7 @@ fun GestoTopBar(
             title = {
                 Column {
                     Text(
-                        "WAYPAD",
+                        "Gesto",
                         style = GestoTheme.accentTypography.brand,
                     )
                     Text(
@@ -93,9 +67,14 @@ fun GestoTopBar(
                     )
                 }
             },
-            navigationIcon = { BrandMark(Modifier.padding(start = GestoTheme.spacing.xl)) },
+            navigationIcon = {
+                GestoMark(
+                    Modifier.padding(start = GestoTheme.spacing.xl),
+                    size = GestoTheme.spacing.brandMarkSize,
+                )
+            },
             actions = {
-                IconButton(onClick = onOpenSettings) {
+                GestoIconButton(onClick = onOpenSettings) {
                     Icon(Icons.Rounded.Settings, contentDescription = "Settings")
                 }
             },

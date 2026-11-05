@@ -16,9 +16,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -138,8 +136,8 @@ fun TrustedHostCard(
         }
         Spacer(Modifier.height(GestoTheme.spacing.xl))
         Row(horizontalArrangement = Arrangement.spacedBy(GestoTheme.spacing.md)) {
-            FilledTonalButton(onClick = onConnect, modifier = Modifier.weight(1f)) { Text("Connect") }
-            OutlinedButton(onClick = onRemove, modifier = Modifier.weight(1f)) { Text("Remove") }
+            GestoButton("Connect", onConnect, Modifier.weight(1f))
+            GestoOutlinedButton("Remove", onRemove, Modifier.weight(1f))
         }
     }
 }
