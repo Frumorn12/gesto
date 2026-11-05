@@ -38,51 +38,52 @@ class GestoClient {
         // The live channel stays open until the new one is established, so a failed attempt
         // leaves the current session intact.
         val ch = SecureChannel.connect(address, port, expectedFingerprint)
-        val id = requestId()
-        ch.send(
-            JSONObject()
-                .put("type", "pair_request")
-                .put("request_id", id)
-                .put("device_name", deviceName)
-                .put("pairing_code", pairingCode)
-                .put("app_version", "0.1.0")
-        )
-        val response = try {
-            ch.receiveResponse(id, APPROVAL_TIMEOUT_MS)
+        // Everything that can fail happens before the old channel is touched; the new one is
+        // closed on any failure.
+        val (host, capabilities) = try {
+            val id = requestId()
+            ch.send(
+                JSONObject()
+                    .put("type", "pair_request")
+                    .put("request_id", id)
+                    .put("device_name", deviceName)
+                    .put("pairing_code", pairingCode)
+                    .put("app_version", "0.1.0")
+            )
+            val data = ch.receiveResponse(id, APPROVAL_TIMEOUT_MS).getJSONObject("data")
+            TrustedHost(
+                id = "${address}:${port}",
+                hostName = data.optString("host_name", address),
+                address = address,
+                port = port,
+                fingerprint = data.getString("host_fingerprint"),
+                deviceId = data.getString("device_id"),
+                sessionToken = data.getString("session_token"),
+                lastConnectedAt = System.currentTimeMillis(),
+            ) to data.optJSONObject("capabilities").toCapabilitySummary()
         } catch (e: Throwable) {
             ch.close()
             throw e
         }
         channel?.close()
         oneWayResponseIds.clear()
-        val data = response.getJSONObject("data")
-        val host = TrustedHost(
-            id = "${address}:${port}",
-            hostName = data.optString("host_name", address),
-            address = address,
-            port = port,
-            fingerprint = data.getString("host_fingerprint"),
-            deviceId = data.getString("device_id"),
-            sessionToken = data.getString("session_token"),
-            lastConnectedAt = System.currentTimeMillis(),
-        )
         channel = ch
-        host to data.optJSONObject("capabilities").toCapabilitySummary()
+        host to capabilities
     } }
 
     suspend fun connect(host: TrustedHost): CapabilitySummary = withContext(Dispatchers.IO) { transportMutex.withLock {
         val ch = SecureChannel.connect(host.address, host.port, host.fingerprint)
-        val id = requestId()
-        ch.send(
-            JSONObject()
-                .put("type", "auth_request")
-                .put("request_id", id)
-                .put("device_id", host.deviceId)
-                .put("session_token", host.sessionToken)
-                .put("app_version", "0.1.0")
-        )
-        val response = try {
-            ch.receiveResponse(id)
+        val capabilities = try {
+            val id = requestId()
+            ch.send(
+                JSONObject()
+                    .put("type", "auth_request")
+                    .put("request_id", id)
+                    .put("device_id", host.deviceId)
+                    .put("session_token", host.sessionToken)
+                    .put("app_version", "0.1.0")
+            )
+            ch.receiveResponse(id).getJSONObject("data").optJSONObject("capabilities").toCapabilitySummary()
         } catch (e: Throwable) {
             ch.close()
             throw e
@@ -90,7 +91,7 @@ class GestoClient {
         channel?.close()
         oneWayResponseIds.clear()
         channel = ch
-        response.getJSONObject("data").optJSONObject("capabilities").toCapabilitySummary()
+        capabilities
     } }
 
     suspend fun prepareInput() {
@@ -230,7 +231,14 @@ class GestoClient {
         val id = requestId()
         val command = JSONObject(body.toString()).put("name", name)
         ch.send(JSONObject().put("type", "command").put("request_id", id).put("command", command))
-        ch.receiveResponse(id, timeoutMs).optJSONObject("data")
+        try {
+            ch.receiveResponse(id, timeoutMs).optJSONObject("data")
+        } catch (e: GestoApiException) {
+            throw e
+        } catch (e: java.io.IOException) {
+            // The request was already written: it may have run on the PC.
+            throw RequestMayHaveRunException(e)
+        }
     } }
 
     private suspend fun commandOneWay(name: String, body: JSONObject = JSONObject()) = withContext(Dispatchers.IO) { transportMutex.withLock {
@@ -253,28 +261,41 @@ class GestoClient {
         } }
     }
 
-    private fun SecureChannel.receiveResponse(id: String, timeoutMs: Int = RESPONSE_TIMEOUT_MS): JSONObject {
-        while (true) {
-            val response = receive(timeoutMs)
-            check(response.getString("type") == "response") { "Unexpected server message" }
-            val responseId = response.getString("request_id")
-            if (responseId != id) {
-                if (oneWayResponseIds.remove(responseId)) {
-                    if (!response.getBoolean("ok")) {
-                        val error = response.getJSONObject("error")
-                        throw error.toApiException()
-                    }
-                    continue
-                }
-                error("Response ID mismatch")
-            }
-            if (!response.getBoolean("ok")) {
-                val error = response.getJSONObject("error")
-                throw error.toApiException()
-            }
-            oneWayResponseIds.remove(responseId)
-            return response
+    private fun SecureChannel.receiveResponse(id: String, timeoutMs: Int = RESPONSE_TIMEOUT_MS): JSONObject =
+        try {
+            matchResponse(id, oneWayResponseIds) { receive(timeoutMs) }
+        } catch (e: java.net.SocketTimeoutException) {
+            // A reply that arrives late would poison every later read: drop the whole channel so
+            // the caller's reconnect starts from a clean stream.
+            close()
+            if (channel === this) channel = null
+            throw e
         }
+}
+
+/** The daemon answered, so the link is fine, but the command may or may not have run. */
+class RequestMayHaveRunException(cause: Throwable) : java.io.IOException(cause.message, cause)
+
+/**
+ * Reads responses from [next] until the one for [id]. Responses for ids in [pendingIds] (earlier
+ * requests whose answer was never consumed) are skipped, though an error among them is thrown.
+ * Any other id is a protocol error.
+ */
+internal fun matchResponse(id: String, pendingIds: MutableCollection<String>, next: () -> JSONObject): JSONObject {
+    while (true) {
+        val response = next()
+        check(response.getString("type") == "response") { "Unexpected server message" }
+        val responseId = response.getString("request_id")
+        if (responseId != id) {
+            if (pendingIds.remove(responseId)) {
+                if (!response.getBoolean("ok")) throw response.getJSONObject("error").toApiException()
+                continue
+            }
+            error("Response ID mismatch")
+        }
+        if (!response.getBoolean("ok")) throw response.getJSONObject("error").toApiException()
+        pendingIds.remove(responseId)
+        return response
     }
 }
 

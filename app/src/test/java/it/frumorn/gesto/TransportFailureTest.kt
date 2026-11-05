@@ -52,3 +52,20 @@ class TransportFailureTest {
         assertNull(s.connectedHost)
     }
 }
+
+class RetryAndDiscoveryTest {
+    @Test fun requestMayHaveRunIsDetectedButStillTransport() {
+        val e = it.frumorn.gesto.core.network.RequestMayHaveRunException(SocketTimeoutException("Read timed out"))
+        assertTrue(e.isTransportFailure())
+        assertTrue(e.mayHaveRun())
+        assertFalse(SocketException("write failed").mayHaveRun())
+    }
+
+    @Test fun discoveryKeepsHeldSessionState() {
+        val host = TrustedHost("a:1", "A", "a", 1, "f", "d", "t", 0)
+        val held = GestoUiState(connectedHost = host, connectionState = ConnectionState.Connected)
+        assertEquals(ConnectionState.Connected, held.stateDuringDiscovery(ConnectionState.Disconnected))
+        assertEquals(ConnectionState.Connected, held.stateDuringDiscovery(ConnectionState.Discovering))
+        assertEquals(ConnectionState.Discovering, GestoUiState().stateDuringDiscovery(ConnectionState.Discovering))
+    }
+}

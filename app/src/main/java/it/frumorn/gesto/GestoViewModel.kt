@@ -30,6 +30,7 @@ import it.frumorn.gesto.core.model.formatFps
 import it.frumorn.gesto.core.video.RemoteScreenVideoSession
 import it.frumorn.gesto.core.network.GestoApiException
 import it.frumorn.gesto.core.network.GestoClient
+import it.frumorn.gesto.core.network.RequestMayHaveRunException
 import it.frumorn.gesto.core.network.GestoDiscovery
 import it.frumorn.gesto.core.network.GestoInvite
 import it.frumorn.gesto.core.screen.RemoteScreenSessionEvent
@@ -542,7 +543,7 @@ class GestoViewModel(
 
     fun startDiscovery() {
         _state.update {
-            it.copy(screen = Screen.Discovery, connectionState = ConnectionState.Discovering, status = "Scanning LAN...", error = null)
+            it.copy(screen = Screen.Discovery, connectionState = it.stateDuringDiscovery(ConnectionState.Discovering), status = "Scanning LAN...", error = null)
         }
         viewModelScope.launch {
             runCatching { discovery.discover() }
@@ -550,7 +551,8 @@ class GestoViewModel(
                     _state.update {
                         it.copy(
                             discoveredHosts = hosts,
-                            connectionState = ConnectionState.Disconnected,
+                            // A held session keeps its state; scanning never disconnects it.
+                            connectionState = it.stateDuringDiscovery(ConnectionState.Disconnected),
                             status = if (hosts.isEmpty()) "No hosts discovered. Use manual connect." else "Found ${hosts.size} host(s).",
                         )
                     }
@@ -1215,7 +1217,10 @@ class GestoViewModel(
             val result = runCatching { block() }
                 .recoverCatching { throwable ->
                     if (throwable is CancellationException) throw throwable
-                    if (throwable.isTransportFailure() && reconnectCurrentHost()) block() else throw throwable
+                    // Re-run only if the request never reached the PC; after a read failure it may
+                    // already have run.
+                    val canRetry = throwable.isTransportFailure() && !throwable.mayHaveRun()
+                    if (canRetry && reconnectCurrentHost()) block() else throw throwable
                 }
             if (status != null) _state.update { it.copy(status = "Ready") }
             result.onFailure { reportCommandFailure(it) }
@@ -1735,6 +1740,9 @@ private sealed interface RemoteInputCommand {
  * True when the link itself looks broken (reset, closed, timed out) as opposed to the daemon
  * answering with an error. Any answer from the daemon proves the transport is alive.
  */
+internal fun Throwable.mayHaveRun(): Boolean =
+    generateSequence(this) { it.cause }.take(8).any { it is RequestMayHaveRunException }
+
 internal fun Throwable.isTransportFailure(): Boolean {
     val chain = generateSequence(this) { it.cause }.take(8).toList()
     if (chain.any { it is GestoApiException }) return false
@@ -1758,3 +1766,7 @@ internal fun GestoUiState.afterFailedAttempt(prefix: String, error: String): Ges
     } else {
         copy(connectionState = ConnectionState.Error, status = prefix, error = error)
     }
+
+/** Scanning for hosts never changes the state of a session that is held: only an idle app moves. */
+internal fun GestoUiState.stateDuringDiscovery(idle: ConnectionState): ConnectionState =
+    if (connectedHost != null) connectionState else idle
