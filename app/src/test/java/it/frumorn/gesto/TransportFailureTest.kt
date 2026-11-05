@@ -1,0 +1,54 @@
+package it.frumorn.gesto
+
+import it.frumorn.gesto.core.model.ConnectionState
+import it.frumorn.gesto.core.model.TrustedHost
+import it.frumorn.gesto.core.network.GestoApiException
+import java.io.EOFException
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class TransportFailureTest {
+    @Test fun daemonAnswerIsNotTransportEvenIfItSoundsLikeIo() {
+        assertFalse(GestoApiException("command_failed", "Broken pipe (os error 32)", false).isTransportFailure())
+        assertFalse(RuntimeException("wrapped", GestoApiException("x", "Connection reset", false)).isTransportFailure())
+    }
+
+    @Test fun ioErrorsAreTransport() {
+        assertTrue(SocketException("x").isTransportFailure())
+        assertTrue(EOFException().isTransportFailure())
+        assertTrue(SocketTimeoutException("Read timed out").isTransportFailure())
+    }
+
+    @Test fun notConnectedAndClosedAreTransport() {
+        assertTrue(IllegalStateException("Not connected").isTransportFailure())
+        assertTrue(IllegalStateException("Connection closed").isTransportFailure())
+    }
+
+    @Test fun otherErrorsAreNot() {
+        assertFalse(IllegalStateException("boom").isTransportFailure())
+    }
+
+    private val host = TrustedHost(
+        id = "a:1", hostName = "A", address = "a", port = 1, fingerprint = "f",
+        deviceId = "d", sessionToken = "t", lastConnectedAt = 0,
+    )
+
+    @Test fun failedAttemptWithHeldSessionGoesBackToConnected() {
+        val s = GestoUiState(connectedHost = host, connectionState = ConnectionState.Connecting)
+            .afterFailedAttempt("Connection failed", "x")
+        assertEquals(ConnectionState.Connected, s.connectionState)
+        assertEquals(host, s.connectedHost)
+    }
+
+    @Test fun failedAttemptWithoutSessionIsError() {
+        val s = GestoUiState(connectionState = ConnectionState.Pairing).afterFailedAttempt("Pairing failed", "bad")
+        assertEquals(ConnectionState.Error, s.connectionState)
+        assertEquals("bad", s.error)
+        assertNull(s.connectedHost)
+    }
+}

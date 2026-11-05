@@ -18,6 +18,10 @@ import org.json.JSONObject
 class GestoClient {
     private companion object {
         const val MAX_ONE_WAY_POINTER_RESPONSES = 32
+        const val RESPONSE_TIMEOUT_MS = 10_000
+        const val PING_TIMEOUT_MS = 3_000
+        /** For a request the user answers on the PC (approval pairing). */
+        const val APPROVAL_TIMEOUT_MS = 130_000
     }
 
     private val transportMutex = Mutex()
@@ -31,8 +35,8 @@ class GestoClient {
         pairingCode: String,
         expectedFingerprint: String? = null,
     ): Pair<TrustedHost, CapabilitySummary> = withContext(Dispatchers.IO) { transportMutex.withLock {
-        channel?.close()
-        oneWayResponseIds.clear()
+        // The live channel stays open until the new one is established, so a failed attempt
+        // leaves the current session intact.
         val ch = SecureChannel.connect(address, port, expectedFingerprint)
         val id = requestId()
         ch.send(
@@ -43,7 +47,14 @@ class GestoClient {
                 .put("pairing_code", pairingCode)
                 .put("app_version", "0.1.0")
         )
-        val response = ch.receiveResponse(id)
+        val response = try {
+            ch.receiveResponse(id, APPROVAL_TIMEOUT_MS)
+        } catch (e: Throwable) {
+            ch.close()
+            throw e
+        }
+        channel?.close()
+        oneWayResponseIds.clear()
         val data = response.getJSONObject("data")
         val host = TrustedHost(
             id = "${address}:${port}",
@@ -60,8 +71,6 @@ class GestoClient {
     } }
 
     suspend fun connect(host: TrustedHost): CapabilitySummary = withContext(Dispatchers.IO) { transportMutex.withLock {
-        channel?.close()
-        oneWayResponseIds.clear()
         val ch = SecureChannel.connect(host.address, host.port, host.fingerprint)
         val id = requestId()
         ch.send(
@@ -72,13 +81,20 @@ class GestoClient {
                 .put("session_token", host.sessionToken)
                 .put("app_version", "0.1.0")
         )
-        val response = ch.receiveResponse(id)
+        val response = try {
+            ch.receiveResponse(id)
+        } catch (e: Throwable) {
+            ch.close()
+            throw e
+        }
+        channel?.close()
+        oneWayResponseIds.clear()
         channel = ch
         response.getJSONObject("data").optJSONObject("capabilities").toCapabilitySummary()
     } }
 
     suspend fun prepareInput() {
-        command("prepare_input")
+        command("prepare_input", timeoutMs = APPROVAL_TIMEOUT_MS)
     }
 
     suspend fun ping() {
@@ -86,7 +102,7 @@ class GestoClient {
             val ch = channel ?: error("Not connected")
             val id = requestId()
             ch.send(JSONObject().put("type", "ping").put("request_id", id))
-            ch.receiveResponse(id)
+            ch.receiveResponse(id, PING_TIMEOUT_MS)
         } }
     }
 
@@ -205,12 +221,16 @@ class GestoClient {
         oneWayResponseIds.clear()
     }
 
-    private suspend fun command(name: String, body: JSONObject = JSONObject()): JSONObject? = withContext(Dispatchers.IO) { transportMutex.withLock {
+    private suspend fun command(
+        name: String,
+        body: JSONObject = JSONObject(),
+        timeoutMs: Int = RESPONSE_TIMEOUT_MS,
+    ): JSONObject? = withContext(Dispatchers.IO) { transportMutex.withLock {
         val ch = channel ?: error("Not connected")
         val id = requestId()
         val command = JSONObject(body.toString()).put("name", name)
         ch.send(JSONObject().put("type", "command").put("request_id", id).put("command", command))
-        ch.receiveResponse(id).optJSONObject("data")
+        ch.receiveResponse(id, timeoutMs).optJSONObject("data")
     } }
 
     private suspend fun commandOneWay(name: String, body: JSONObject = JSONObject()) = withContext(Dispatchers.IO) { transportMutex.withLock {
@@ -233,9 +253,9 @@ class GestoClient {
         } }
     }
 
-    private fun SecureChannel.receiveResponse(id: String): JSONObject {
+    private fun SecureChannel.receiveResponse(id: String, timeoutMs: Int = RESPONSE_TIMEOUT_MS): JSONObject {
         while (true) {
-            val response = receive()
+            val response = receive(timeoutMs)
             check(response.getString("type") == "response") { "Unexpected server message" }
             val responseId = response.getString("request_id")
             if (responseId != id) {

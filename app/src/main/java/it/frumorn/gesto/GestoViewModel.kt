@@ -555,7 +555,7 @@ class GestoViewModel(
                         )
                     }
                 }
-                .onFailure { fail("Discovery failed", it, ErrorContext.Connecting) }
+                .onFailure { fail("Discovery failed", it, ErrorContext.Connecting, 47771) }
         }
     }
 
@@ -622,7 +622,7 @@ class GestoViewModel(
                     )
                 }
                 publishCurrentExternalDevices()
-            }.onFailure { fail("Pairing failed", it, ErrorContext.Pairing) }
+            }.onFailure { fail("Pairing failed", it, ErrorContext.Pairing, host.port) }
         }
     }
 
@@ -706,7 +706,7 @@ class GestoViewModel(
                     }
                     publishCurrentExternalDevices()
                 }
-                .onFailure { fail("Connection failed", it, ErrorContext.Connecting) }
+                .onFailure { fail("Connection failed", it, ErrorContext.Connecting, host.port) }
         }
     }
 
@@ -1353,20 +1353,10 @@ class GestoViewModel(
      * Pairing and first-connection failures only. With a host already connected a failure is never
      * allowed to park the session in [ConnectionState.Error]: the user gets a notice instead.
      */
-    private fun fail(prefix: String, throwable: Throwable, context: ErrorContext) {
+    private fun fail(prefix: String, throwable: Throwable, context: ErrorContext, port: Int) {
         Log.e(TAG, "connection_state=error prefix=$prefix", throwable)
-        val text = ErrorTranslator.translate(throwable, context, currentPort())
-        if (_state.value.connectedHost != null) {
-            emitNotice(Notice(text))
-            return
-        }
-        _state.update {
-            it.copy(
-                connectionState = ConnectionState.Error,
-                status = prefix,
-                error = resolve(text),
-            )
-        }
+        val text = ErrorTranslator.translate(throwable, context, port)
+        _state.update { it.afterFailedAttempt(prefix, resolve(text)) }
         emitNotice(Notice(text))
     }
 
@@ -1741,16 +1731,30 @@ private sealed interface RemoteInputCommand {
     data object Ping : RemoteInputCommand
 }
 
-private fun Throwable.isTransportFailure(): Boolean {
-    val text = generateSequence(this) { it.cause }
-        .mapNotNull { it.message }
-        .joinToString(" ")
-        .lowercase()
-    val io = generateSequence(this) { it.cause }.any { it is java.io.IOException }
-    return io ||
-        "broken pipe" in text ||
+/**
+ * True when the link itself looks broken (reset, closed, timed out) as opposed to the daemon
+ * answering with an error. Any answer from the daemon proves the transport is alive.
+ */
+internal fun Throwable.isTransportFailure(): Boolean {
+    val chain = generateSequence(this) { it.cause }.take(8).toList()
+    if (chain.any { it is GestoApiException }) return false
+    if (chain.any { it is java.io.IOException }) return true
+    val text = chain.mapNotNull { it.message }.joinToString(" ").lowercase()
+    return "broken pipe" in text ||
         "connection reset" in text ||
         "connection closed" in text ||
         "socket closed" in text ||
         "not connected" in text
 }
+
+/**
+ * State after a connect/pair/discover attempt failed while a session is still held: the attempt
+ * never replaced the live channel, so the session goes back to Connected. Without a held session
+ * the Error state is kept.
+ */
+internal fun GestoUiState.afterFailedAttempt(prefix: String, error: String): GestoUiState =
+    if (connectedHost != null) {
+        copy(connectionState = ConnectionState.Connected, status = "Ready")
+    } else {
+        copy(connectionState = ConnectionState.Error, status = prefix, error = error)
+    }

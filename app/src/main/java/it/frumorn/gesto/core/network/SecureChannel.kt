@@ -3,6 +3,7 @@ package it.frumorn.gesto.core.network
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.BufferedWriter
+import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.UUID
 
@@ -30,8 +31,18 @@ class SecureChannel private constructor(
         writer.flush()
     }
 
-    fun receive(): JSONObject {
-        val line = reader.readLine() ?: error("Connection closed")
+    /**
+     * Reads one frame. [timeoutMs] bounds this read only (via `soTimeout`), then the previous
+     * timeout is restored; a silent link surfaces as a [java.net.SocketTimeoutException].
+     */
+    fun receive(timeoutMs: Int? = null): JSONObject {
+        val previous = socket.soTimeout
+        if (timeoutMs != null) socket.soTimeout = timeoutMs
+        val line = try {
+            reader.readLine() ?: error("Connection closed")
+        } finally {
+            if (timeoutMs != null && !socket.isClosed) socket.soTimeout = previous
+        }
         val frame = JSONObject(line)
         val seq = frame.getLong("seq")
         check(seq == recvSeq) { "Replay or out-of-order frame: got $seq expected $recvSeq" }
@@ -46,11 +57,20 @@ class SecureChannel private constructor(
     }
 
     companion object {
+        const val CONNECT_TIMEOUT_MS = 5_000
+        const val HANDSHAKE_TIMEOUT_MS = 10_000
+
         fun connect(host: String, port: Int, expectedFingerprint: String? = null): SecureChannel {
-            val socket = Socket(host, port)
+            val socket = Socket()
+            try {
+                socket.connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
+            } catch (e: Exception) {
+                socket.close()
+                throw e
+            }
             socket.tcpNoDelay = true
             socket.keepAlive = true
-            socket.soTimeout = 130_000
+            socket.soTimeout = HANDSHAKE_TIMEOUT_MS
             socket.setSoLinger(true, 0)
             val reader = socket.getInputStream().bufferedReader()
             val writer = socket.getOutputStream().bufferedWriter()
@@ -97,6 +117,7 @@ class SecureChannel private constructor(
 
             val shared = GestoCrypto.ecdh(keyPair.private, serverEphemeral)
             val (c2s, s2c) = GestoCrypto.deriveKeys(shared, sessionNonce)
+            socket.soTimeout = 130_000
             return SecureChannel(socket, reader, writer, c2s, s2c, fingerprint, response.getString("host_public_key"))
         }
     }
