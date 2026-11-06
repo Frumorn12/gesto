@@ -43,8 +43,26 @@ data class GestoSpacing(
     /** Movement below which a pointer gesture still counts as a tap. */
     val tapSlop: Dp = 8.dp
 
-    /** Height of a primary "click" target on the touchpad screen. */
-    val clickButtonHeight: Dp = 56.dp
+    /** Height of the Left and Right buttons (and the scroll strip) under the touchpad. */
+    val clickButtonHeight: Dp = 58.dp
+
+    /** The narrow scroll strip between the touchpad's Left and Right buttons. */
+    val scrollStripWidth: Dp = 54.dp
+
+    /** One line of the scroll strip every this many dp. */
+    val scrollStripLineGap: Dp = 8.dp
+
+    /** The touchpad's dot grid: one dot every [padDotGap], [padDotRadius] across. */
+    val padDotGap: Dp = 22.dp
+    val padDotRadius: Dp = 1.dp
+
+    /** The square drawn under each finger on the touchpad. */
+    val fingerMarkSize: Dp = 34.dp
+
+    /** The mini PC screen in the touchpad's corner, and the cursor square on it. */
+    val miniScreenWidth: Dp = 76.dp
+    val miniScreenHeight: Dp = 48.dp
+    val miniCursorSize: Dp = 6.dp
 
     /** Size of the brand mark shown in the top app bar. */
     val brandMarkSize: Dp = 38.dp

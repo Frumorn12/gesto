@@ -51,6 +51,22 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun touchpadDefaults() = runBlocking {
+        assertEquals(1f, repo.pointerSpeed.first())
+        assertEquals(true, repo.pointerAcceleration.first())
+        assertEquals(true, repo.twoFingerRightClick.first())
+        assertEquals(0, repo.touchpadHintSessions.first())
+    }
+
+    @Test
+    fun pointerSpeedIsKeptWithinItsRange() = runBlocking {
+        repo.savePointerSpeed(9f)
+        assertEquals(3f, repo.pointerSpeed.first())
+        repo.savePointerSpeed(0.75f)
+        assertEquals(0.75f, repo.pointerSpeed.first())
+    }
+
+    @Test
     fun saveAndRestoreGameMode() = runBlocking {
         repo.saveGameMode(true)
         val loaded = repo.gameMode.first()

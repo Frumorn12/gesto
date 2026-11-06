@@ -2,6 +2,8 @@ package it.frumorn.gesto.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -14,6 +16,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -76,6 +80,35 @@ fun GestoOutlinedButton(
             if (enabled) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
         ),
+    ) { ButtonLabel(text, icon) }
+}
+
+/**
+ * Neutral tile, like a key: 1 dp outlineVariant border on the page colour, primaryContainer while
+ * pressed. For pads of equal actions (the touchpad's Left and Right).
+ */
+@Composable
+fun GestoTileButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val colors = MaterialTheme.colorScheme
+    OutlinedButton(
+        onClick = onClick,
+        modifier = modifier.height(ButtonHeight),
+        enabled = enabled,
+        shape = MaterialTheme.shapes.extraSmall,
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = if (pressed) colors.primaryContainer else colors.background,
+            contentColor = colors.onSurface,
+        ),
+        border = BorderStroke(GestoTheme.spacing.borderWidth, colors.outlineVariant),
+        interactionSource = interaction,
     ) { ButtonLabel(text, icon) }
 }
 

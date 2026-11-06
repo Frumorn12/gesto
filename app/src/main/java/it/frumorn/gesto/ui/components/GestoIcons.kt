@@ -64,6 +64,8 @@ object GestoIcons {
     /** A pencil: type something in. */
     val Edit: ImageVector by lazy { lineIcon("Edit", "M4 20h4L19 9l-4-4L4 16z", "M13 7l4 4") }
     val Chevron: ImageVector by lazy { lineIcon("Chevron", "M9 5l7 7-7 7") }
+    /** An arrow up and an arrow down: drag here to scroll. */
+    val ScrollVertical: ImageVector by lazy { lineIcon("ScrollVertical", "M12 4v16", "M8 8l4-4 4 4", "M8 16l4 4 4-4") }
 }
 
 private fun rect(x: Int, y: Int, w: Int, h: Int) = "M$x ${y}h${w}v${h}h-${w}z"

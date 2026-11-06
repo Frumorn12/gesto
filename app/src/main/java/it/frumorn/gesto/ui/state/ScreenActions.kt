@@ -2,7 +2,7 @@ package it.frumorn.gesto.ui.state
 
 import androidx.compose.runtime.Immutable
 import it.frumorn.gesto.SessionMode
-import it.frumorn.gesto.core.input.RemoteGestureMode
+import it.frumorn.gesto.core.input.PointerDelta
 import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.PointerButton
 import it.frumorn.gesto.core.model.StreamProfile
@@ -51,15 +51,20 @@ data class AddPcActions(
 )
 
 @Immutable
-data class RemotePadActions(
+data class TouchpadActions(
+    /** Asks the PC to show its approval request. */
     val onPrepareInput: () -> Unit = {},
-    val onPointerMove: (dx: Float, dy: Float) -> Unit = { _, _ -> },
+    /** Asks the PC again what it can do (after it refused input). */
+    val onCheckInput: () -> Unit = {},
+    /** A finger move; returns the move sent to the PC (after speed and acceleration), or null. */
+    val onPointerMove: (dx: Float, dy: Float) -> PointerDelta? = { _, _ -> null },
     val onScroll: (dx: Float, dy: Float, finish: Boolean) -> Unit = { _, _, _ -> },
     val onPointerButton: (PointerButton, ButtonState) -> Unit = { _, _ -> },
     val onReleasePointerButtons: () -> Unit = {},
     val onBeginInteraction: () -> Long = { 0L },
     val onEndInteraction: (Long) -> Unit = {},
-    val onGestureStateChanged: (RemoteGestureMode, Int) -> Unit = { _, _ -> },
+    /** Three-finger tap: opens or closes the keyboard sheet. */
+    val onToggleKeyboard: () -> Unit = {},
     val onPointerCancelled: (String) -> Unit = {},
     val onPointerFailed: (Throwable) -> Unit = {},
 )

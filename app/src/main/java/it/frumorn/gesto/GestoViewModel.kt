@@ -10,7 +10,9 @@ import it.frumorn.gesto.core.externalinput.ExternalInputDeviceSummary
 import it.frumorn.gesto.core.externalinput.ExternalInputEvent
 import it.frumorn.gesto.core.errors.ErrorContext
 import it.frumorn.gesto.core.errors.ErrorTranslator
-import it.frumorn.gesto.core.input.RemoteGestureMode
+import it.frumorn.gesto.core.input.PointerAcceleration
+import it.frumorn.gesto.core.input.PointerDelta
+import it.frumorn.gesto.core.input.SubPixelCarry
 import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.CapabilitySummary
 import it.frumorn.gesto.core.model.ConnectionState
@@ -140,9 +142,14 @@ data class GestoUiState(
     val themeMode: ThemeMode = ThemeMode.System,
     val roundedCorners: Boolean = false,
     val remoteInputSessionActive: Boolean = false,
-    val remoteGestureMode: RemoteGestureMode = RemoteGestureMode.Idle,
-    val remotePointerCount: Int = 0,
     val remoteInputBacklog: Int = 0,
+    /** Touchpad pointer speed, 0.5 to 3.0. */
+    val pointerSpeed: Float = PointerAcceleration.DEFAULT_SPEED,
+    val pointerAcceleration: Boolean = true,
+    /** A two-finger tap on the touchpad is a right click. */
+    val twoFingerRightClick: Boolean = true,
+    /** The touchpad shows its gesture hints in this session (one of the first five). */
+    val touchpadHints: Boolean = false,
     val externalInputDevices: List<ExternalInputDeviceSummary> = emptyList(),
     val externalInputStatus: String = "No external input devices detected",
     val screenSources: List<ScreenSource> = emptyList(),
@@ -195,6 +202,8 @@ class GestoViewModel(
         /** Rest between two scans when one ran long, so the radio is never kept busy back to back. */
         const val PRESENCE_MIN_GAP_MS = 500L
         const val DEFAULT_PORT = 47771
+        /** The touchpad's gesture hints show in this many sessions. */
+        const val TOUCHPAD_HINT_SESSIONS = 5
     }
 
     private val discovery = GestoDiscovery(application)
@@ -249,6 +258,10 @@ class GestoViewModel(
     private var pairingCounter = 0L
     /** The PC being paired was typed in by address: a failure goes back to that step. */
     private var pairingFromAddress = false
+    /** Whether this session shows the touchpad hints has been decided (and counted). */
+    private var touchpadHintsDecided = false
+    /** Fractions of a pixel the touchpad moves left behind, sent with the next move. */
+    private val pointerCarry = SubPixelCarry()
 
     init {
         observeVideoSession()
@@ -284,6 +297,15 @@ class GestoViewModel(
             settingsRepo.lastMode.collect { mode ->
                 _state.update { it.copy(lastMode = mode) }
             }
+        }
+        viewModelScope.launch {
+            settingsRepo.pointerSpeed.collect { speed -> _state.update { it.copy(pointerSpeed = speed) } }
+        }
+        viewModelScope.launch {
+            settingsRepo.pointerAcceleration.collect { on -> _state.update { it.copy(pointerAcceleration = on) } }
+        }
+        viewModelScope.launch {
+            settingsRepo.twoFingerRightClick.collect { on -> _state.update { it.copy(twoFingerRightClick = on) } }
         }
         // After process death the saved session wins; otherwise open the PC a launcher shortcut
         // asked for (its intent extra arrives here as a default argument), else the last PC used.
@@ -550,6 +572,22 @@ class GestoViewModel(
         }
         if (screen == Screen.Display && _state.value.screenSources.isEmpty()) {
             loadScreenSources()
+        }
+        if (screen == Screen.Touchpad) decideTouchpadHints()
+    }
+
+    /**
+     * The first time a session shows the touchpad: its gesture hints show if fewer than
+     * [TOUCHPAD_HINT_SESSIONS] sessions have shown them, and this session is counted.
+     */
+    private fun decideTouchpadHints() {
+        if (touchpadHintsDecided) return
+        touchpadHintsDecided = true
+        viewModelScope.launch {
+            val shown = runCatching { settingsRepo.touchpadHintSessions.first() }.getOrDefault(TOUCHPAD_HINT_SESSIONS)
+            val show = shown < TOUCHPAD_HINT_SESSIONS
+            _state.update { it.copy(touchpadHints = show) }
+            if (show) settingsRepo.saveTouchpadHintSessions(shown + 1)
         }
     }
 
@@ -1217,6 +1255,9 @@ class GestoViewModel(
         interactionKeepAliveJob?.cancel()
         interactionEndJob?.cancel()
         activeInteractionSessionId = 0L
+        // The next session decides the touchpad hints again.
+        touchpadHintsDecided = false
+        pointerCarry.reset()
         savedStateHandle["connectedHostId"] = null
         savedStateHandle["screen"] = null
         // A lost link only moves the user out of the session; Settings or Add a PC stay put.
@@ -1230,9 +1271,8 @@ class GestoViewModel(
                 reconnecting = false,
                 latencyMs = null,
                 remoteInputSessionActive = false,
-                remoteGestureMode = RemoteGestureMode.Idle,
-                remotePointerCount = 0,
                 remoteInputBacklog = 0,
+                touchpadHints = false,
                 externalInputStatus = externalInputSummary(it.externalInputDevices),
                 screenSources = emptyList(),
                 selectedScreenSourceId = null,
@@ -1356,22 +1396,9 @@ class GestoViewModel(
         if (!_state.value.remoteInputSessionActive) {
             Log.d(TAG, "remote_interaction_start session=$sessionId")
         }
-        _state.update {
-            it.copy(
-                remoteInputSessionActive = true,
-                remoteGestureMode = RemoteGestureMode.SinglePointerDown,
-                remotePointerCount = maxOf(1, it.remotePointerCount),
-            )
-        }
+        _state.update { it.copy(remoteInputSessionActive = true) }
         startInteractionKeepAlive()
         return sessionId
-    }
-
-    fun updateRemoteGesture(mode: RemoteGestureMode, pointerCount: Int) {
-        val current = _state.value
-        if (current.remoteGestureMode == mode && current.remotePointerCount == pointerCount) return
-        Log.d(TAG, "gesture_state mode=${mode.label} pointer_count=$pointerCount")
-        _state.update { it.copy(remoteGestureMode = mode, remotePointerCount = pointerCount) }
     }
 
     fun endRemoteInteraction(sessionId: Long) {
@@ -1383,13 +1410,7 @@ class GestoViewModel(
             Log.d(TAG, "remote_interaction_end session=$sessionId")
             activeInteractionSessionId = 0L
             interactionKeepAliveJob?.cancel()
-            _state.update {
-                it.copy(
-                    remoteInputSessionActive = false,
-                    remoteGestureMode = RemoteGestureMode.Idle,
-                    remotePointerCount = 0,
-                )
-            }
+            _state.update { it.copy(remoteInputSessionActive = false) }
         }
     }
 
@@ -1401,9 +1422,15 @@ class GestoViewModel(
         Log.e(TAG, "pointer_failure", throwable)
     }
 
-    fun pointerMove(dx: Float, dy: Float) {
-        if (!dx.isFinite() || !dy.isFinite()) return
-        enqueueInput(RemoteInputCommand.PointerMove(dx, dy))
+    /**
+     * A finger move on the touchpad, scaled by the pointer speed and acceleration. Returns the move
+     * queued for the PC, or null when none was (not connected, too much queued, not a number).
+     */
+    fun pointerMove(dx: Float, dy: Float): PointerDelta? {
+        if (!dx.isFinite() || !dy.isFinite()) return null
+        val s = _state.value
+        val (sentX, sentY) = PointerAcceleration.apply(dx, dy, s.pointerSpeed, s.pointerAcceleration)
+        return if (enqueueInput(RemoteInputCommand.PointerMove(sentX, sentY))) PointerDelta(sentX, sentY) else null
     }
 
     fun pointerButton(button: PointerButton, state: ButtonState) {
@@ -1954,22 +1981,24 @@ class GestoViewModel(
         }
     }
 
-    private fun enqueueInput(command: RemoteInputCommand) {
+    /** Queues [command] for the PC; false when it was dropped. */
+    private fun enqueueInput(command: RemoteInputCommand): Boolean {
         lastInputAtMs = System.currentTimeMillis()
         val current = _state.value
         if (current.connectedHost == null || current.connectionState == ConnectionState.Disconnected) {
             Log.d(TAG, "input_queue_drop_disconnected command=$command")
-            return
+            return false
         }
         val queued = queuedInputCommands.get()
         if (command.isRealtime && queued >= REALTIME_INPUT_BACKLOG_HIGH_WATERMARK) {
             Log.w(TAG, "input_queue_drop_stale_realtime depth=$queued command=$command")
-            return
+            return false
         }
         val result = inputCommands.trySend(command)
         if (result.isSuccess) {
             val depth = queuedInputCommands.incrementAndGet()
             updateInputBacklog(depth)
+            return true
         } else if (command.isTerminal) {
             Log.w(TAG, "input_queue_backpressure command=$command preserving_terminal=true")
             viewModelScope.launch {
@@ -1982,8 +2011,10 @@ class GestoViewModel(
                         Log.w(TAG, "input_queue_rejected command=$command cause=${it.message}")
                     }
             }
+            return true
         } else {
             Log.w(TAG, "input_queue_drop_backpressure command=$command cause=${result.exceptionOrNull()?.message}")
+            return false
         }
     }
 
@@ -2044,9 +2075,10 @@ class GestoViewModel(
                         break
                     }
                 }
-                if (abs(dx) + abs(dy) > 0.01f) {
-                    Log.v(TAG, "transport_send type=pointer_move dx=$dx dy=$dy")
-                    sendInput("pointer_move") { client.pointerMove(dx, dy) }
+                val (wholeX, wholeY) = pointerCarry.take(dx, dy)
+                if (wholeX != 0 || wholeY != 0) {
+                    Log.v(TAG, "transport_send type=pointer_move dx=$wholeX dy=$wholeY")
+                    sendInput("pointer_move") { client.pointerMove(wholeX.toFloat(), wholeY.toFloat()) }
                 }
             }
             is RemoteInputCommand.PointerMoveAbsolute -> {

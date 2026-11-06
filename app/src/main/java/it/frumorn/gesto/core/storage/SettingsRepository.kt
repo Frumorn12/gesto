@@ -5,10 +5,12 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import it.frumorn.gesto.SessionMode
+import it.frumorn.gesto.core.input.PointerAcceleration
 import it.frumorn.gesto.core.model.StreamProfile
 import it.frumorn.gesto.core.model.StreamSettings
 import it.frumorn.gesto.ui.theme.ThemeMode
@@ -30,6 +32,10 @@ class SettingsRepository(private val context: Context) {
         val ROUNDED_CORNERS = booleanPreferencesKey("rounded_corners")
         val FIRST_RUN = booleanPreferencesKey("first_run")
         val LAST_MODE = stringPreferencesKey("last_mode")
+        val POINTER_SPEED = floatPreferencesKey("pointer_speed")
+        val POINTER_ACCELERATION = booleanPreferencesKey("pointer_acceleration")
+        val TWO_FINGER_RIGHT_CLICK = booleanPreferencesKey("two_finger_right_click")
+        val TOUCHPAD_HINT_SESSIONS = intPreferencesKey("touchpad_hint_sessions")
     }
 
     val streamSettings: Flow<StreamSettings> = context.dataStore.data.map { prefs ->
@@ -62,6 +68,32 @@ class SettingsRepository(private val context: Context) {
     /** The session mode the app reopens on; Touchpad until one is used, or for an unknown value. */
     val lastMode: Flow<SessionMode> = context.dataStore.data.map { prefs ->
         SessionMode.entries.find { it.name == prefs[Keys.LAST_MODE] } ?: SessionMode.Touchpad
+    }
+
+    /** Touchpad pointer speed, 0.5 to 3.0; 1.0 until it is changed. */
+    val pointerSpeed: Flow<Float> = context.dataStore.data.map { prefs ->
+        PointerAcceleration.clampSpeed(prefs[Keys.POINTER_SPEED] ?: PointerAcceleration.DEFAULT_SPEED)
+    }
+    val pointerAcceleration: Flow<Boolean> = context.dataStore.data.map { it[Keys.POINTER_ACCELERATION] ?: true }
+    val twoFingerRightClick: Flow<Boolean> = context.dataStore.data.map { it[Keys.TWO_FINGER_RIGHT_CLICK] ?: true }
+
+    /** How many sessions have shown the touchpad's gesture hints. */
+    val touchpadHintSessions: Flow<Int> = context.dataStore.data.map { it[Keys.TOUCHPAD_HINT_SESSIONS] ?: 0 }
+
+    suspend fun savePointerSpeed(speed: Float) {
+        context.dataStore.edit { prefs -> prefs[Keys.POINTER_SPEED] = PointerAcceleration.clampSpeed(speed) }
+    }
+
+    suspend fun savePointerAcceleration(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.POINTER_ACCELERATION] = enabled }
+    }
+
+    suspend fun saveTwoFingerRightClick(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[Keys.TWO_FINGER_RIGHT_CLICK] = enabled }
+    }
+
+    suspend fun saveTouchpadHintSessions(count: Int) {
+        context.dataStore.edit { prefs -> prefs[Keys.TOUCHPAD_HINT_SESSIONS] = count }
     }
 
     suspend fun saveLastMode(mode: SessionMode) {

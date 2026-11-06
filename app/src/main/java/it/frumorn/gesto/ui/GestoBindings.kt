@@ -32,12 +32,13 @@ import it.frumorn.gesto.ui.state.FoundPcState
 import it.frumorn.gesto.ui.state.PcCardState
 import it.frumorn.gesto.ui.state.RemoteDisplayActions
 import it.frumorn.gesto.ui.state.RemoteDisplayUiState
-import it.frumorn.gesto.ui.state.RemotePadActions
-import it.frumorn.gesto.ui.state.RemotePadUiState
 import it.frumorn.gesto.ui.state.SessionActions
 import it.frumorn.gesto.ui.state.SessionUiState
 import it.frumorn.gesto.ui.state.SettingsActions
 import it.frumorn.gesto.ui.state.SettingsUiState
+import it.frumorn.gesto.ui.state.TouchpadActions
+import it.frumorn.gesto.ui.state.TouchpadInput
+import it.frumorn.gesto.ui.state.TouchpadUiState
 import it.frumorn.gesto.ui.text.UiText
 
 /**
@@ -55,7 +56,7 @@ class GestoActions(
     val launch: LaunchActions = LaunchActions(),
     val session: SessionActions = SessionActions(),
     val addPc: AddPcActions = AddPcActions(),
-    val remotePad: RemotePadActions = RemotePadActions(),
+    val touchpad: TouchpadActions = TouchpadActions(),
     val remoteDisplay: RemoteDisplayActions = RemoteDisplayActions(),
     val keyboard: KeyboardActions = KeyboardActions(),
     val controls: ControlsActions = ControlsActions(),
@@ -93,15 +94,16 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
             onInviteScanned = viewModel::applyInvite,
             onCloseQr = { viewModel.setAddPcStep(AddPcStep.Search) },
         ),
-        remotePad = RemotePadActions(
+        touchpad = TouchpadActions(
             onPrepareInput = viewModel::prepareInput,
+            onCheckInput = viewModel::refreshCapabilities,
             onPointerMove = viewModel::pointerMove,
             onScroll = { dx, dy, finish -> viewModel.scroll(dx, dy, finish) },
             onPointerButton = viewModel::pointerButton,
             onReleasePointerButtons = viewModel::releasePointerButtons,
             onBeginInteraction = viewModel::beginRemoteInteraction,
             onEndInteraction = viewModel::endRemoteInteraction,
-            onGestureStateChanged = viewModel::updateRemoteGesture,
+            onToggleKeyboard = { viewModel.setKeyboardOpen(!viewModel.state.value.keyboardOpen) },
             onPointerCancelled = viewModel::notePointerCancellation,
             onPointerFailed = viewModel::notePointerFailure,
         ),
@@ -191,15 +193,16 @@ internal fun GestoUiState.toAddPcState(): AddPcUiState = AddPcUiState(
     port = manualPort,
 )
 
-internal fun GestoUiState.toRemotePadState(): RemotePadUiState = RemotePadUiState(
-    inputSupported = capabilities.inputSupported,
-    inputBackend = capabilities.inputBackend,
+internal fun GestoUiState.toTouchpadState(): TouchpadUiState = TouchpadUiState(
+    input = when {
+        // Until the PC has answered, what it can do is not known yet.
+        connectionState == ConnectionState.Connected && !capabilities.inputSupported -> TouchpadInput.Blocked
+        capabilities.inputBackend == "wayland-portal" -> TouchpadInput.NeedsApproval
+        else -> TouchpadInput.Ready
+    },
     haptics = haptics,
-    sessionActive = remoteInputSessionActive,
-    gestureMode = remoteGestureMode,
-    pointerCount = remotePointerCount,
-    inputBacklog = remoteInputBacklog,
-    connectionLabel = connectionState.name,
+    twoFingerRightClick = twoFingerRightClick,
+    hints = touchpadHints,
     controllerConnected = externalInputDevices.any { device ->
         device.classes.contains(ExternalInputDeviceClass.Gamepad) ||
             device.classes.contains(ExternalInputDeviceClass.Joystick)

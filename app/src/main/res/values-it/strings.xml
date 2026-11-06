@@ -56,6 +56,22 @@
 
     <string name="keyboard_close">Chiudi la tastiera</string>
 
+    <string name="touchpad_pc_screen">schermo PC</string>
+    <string name="touchpad_cursor_hint">Dove si trova il puntatore sul PC, più o meno</string>
+    <string name="touchpad_left">Sinistro</string>
+    <string name="touchpad_right">Destro</string>
+    <string name="touchpad_scroll_strip">Scorri: trascina su o giù</string>
+    <string name="touchpad_hint_move">%1$s dito muove</string>
+    <string name="touchpad_hint_tap">tocco = clic</string>
+    <string name="touchpad_hint_scroll">%1$s dita scorrono</string>
+    <string name="touchpad_hint_right_click">tocco a %1$s = destro</string>
+    <string name="touchpad_hint_keyboard">tocco a %1$s = tastiera</string>
+    <string name="touchpad_approve_text">Approva sul PC: lo chiede una volta prima che il telefono possa controllarlo.</string>
+    <string name="touchpad_approve_action">Chiedi al PC</string>
+    <string name="touchpad_blocked_text">Ora questo PC non accetta comandi dal telefono.</string>
+    <string name="touchpad_blocked_action">Ricontrolla</string>
+    <string name="touchpad_controller">Controller collegato: funziona sullo Schermo, a tutto schermo o in modalità gioco.</string>
+
     <string name="quick_right_click">Clic destro</string>
     <string name="quick_pc_audio">Audio del PC</string>
     <string name="quick_touch">Tocco</string>

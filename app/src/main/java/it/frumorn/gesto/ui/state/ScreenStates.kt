@@ -4,7 +4,6 @@ import androidx.compose.runtime.Immutable
 import it.frumorn.gesto.AddPcStep
 import it.frumorn.gesto.SessionMode
 import it.frumorn.gesto.core.externalinput.ExternalInputDeviceSummary
-import it.frumorn.gesto.core.input.RemoteGestureMode
 import it.frumorn.gesto.core.model.CapabilitySummary
 import it.frumorn.gesto.core.model.ScreenSource
 import it.frumorn.gesto.core.model.ScreenStreamStats
@@ -67,16 +66,24 @@ data class AddPcUiState(
     val port: String = "47771",
 )
 
+/** Whether the PC takes the touchpad's input, as far as the app knows. */
+enum class TouchpadInput {
+    Ready,
+    /** The PC asks once, on its screen, before the phone may control it. */
+    NeedsApproval,
+    /** The PC said it can't take input from the phone. */
+    Blocked,
+}
+
 @Immutable
-data class RemotePadUiState(
-    val inputSupported: Boolean = false,
-    val inputBackend: String = "unknown",
+data class TouchpadUiState(
+    val input: TouchpadInput = TouchpadInput.Ready,
+    /** A light vibration on every click. */
     val haptics: Boolean = true,
-    val sessionActive: Boolean = false,
-    val gestureMode: RemoteGestureMode = RemoteGestureMode.Idle,
-    val pointerCount: Int = 0,
-    val inputBacklog: Int = 0,
-    val connectionLabel: String = "Disconnected",
+    /** A two-finger tap is a right click. */
+    val twoFingerRightClick: Boolean = true,
+    /** The gesture hints at the bottom of the pad (the first sessions only). */
+    val hints: Boolean = false,
     val controllerConnected: Boolean = false,
 )
 

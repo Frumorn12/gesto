@@ -54,8 +54,8 @@ import it.frumorn.gesto.ui.screens.KeyboardScreen
 import it.frumorn.gesto.ui.screens.LaunchScreen
 import it.frumorn.gesto.ui.screens.RemoteDisplayScreen
 import it.frumorn.gesto.ui.screens.RemoteDisplayVideoSurface
-import it.frumorn.gesto.ui.screens.RemotePadScreen
 import it.frumorn.gesto.ui.screens.SettingsScreen
+import it.frumorn.gesto.ui.screens.TouchpadScreen
 import it.frumorn.gesto.ui.screens.TroubleshootingScreen
 import it.frumorn.gesto.ui.session.GestoSnackbarHost
 import it.frumorn.gesto.ui.session.SessionScaffold
@@ -222,7 +222,7 @@ private fun SessionPage(
                     .fillMaxSize()
             ) {
                 when (screen) {
-                    Screen.Touchpad -> RemotePadScreen(state.toRemotePadState(), actions.remotePad)
+                    Screen.Touchpad -> TouchpadScreen(state.toTouchpadState(), actions.touchpad)
                     Screen.Display -> RemoteDisplayScreen(
                         state = state.toRemoteDisplayState(),
                         actions = actions.remoteDisplay,

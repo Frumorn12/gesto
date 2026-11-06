@@ -56,6 +56,23 @@
 
     <string name="keyboard_close">Close the keyboard</string>
 
+    <string name="touchpad_pc_screen">PC screen</string>
+    <string name="touchpad_cursor_hint">Where the pointer is on the PC, roughly</string>
+    <string name="touchpad_left">Left</string>
+    <string name="touchpad_right">Right</string>
+    <string name="touchpad_scroll_strip">Scroll: drag up or down</string>
+    <!-- Gesture hints at the bottom of the touchpad; %1$s is the number of fingers, shown in colour. -->
+    <string name="touchpad_hint_move">%1$s finger moves</string>
+    <string name="touchpad_hint_tap">tap = click</string>
+    <string name="touchpad_hint_scroll">%1$s fingers scroll</string>
+    <string name="touchpad_hint_right_click">%1$s-finger tap = right click</string>
+    <string name="touchpad_hint_keyboard">%1$s-finger tap = keyboard</string>
+    <string name="touchpad_approve_text">Approve on the PC: it asks once before this phone can control it.</string>
+    <string name="touchpad_approve_action">Ask the PC</string>
+    <string name="touchpad_blocked_text">This PC doesn\'t take control from the phone right now.</string>
+    <string name="touchpad_blocked_action">Check again</string>
+    <string name="touchpad_controller">Controller connected: it works on the Screen, in full screen or in game mode.</string>
+
     <string name="quick_right_click">Right click</string>
     <string name="quick_pc_audio">PC audio</string>
     <string name="quick_touch">Touch</string>
