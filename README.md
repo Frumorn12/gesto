@@ -7,14 +7,14 @@
   <img alt="Android 8.0+" src="https://img.shields.io/badge/Android-8.0%2B-271E52?style=flat-square&logo=android&logoColor=white">
   <img alt="Kotlin and Jetpack Compose" src="https://img.shields.io/badge/Kotlin-Compose-7F52FF?style=flat-square&logo=kotlin&logoColor=white">
   <img alt="Desktop: Wayland and Hyprland" src="https://img.shields.io/badge/desktop-Wayland%20%C2%B7%20Hyprland-493990?style=flat-square">
-  <img alt="No tracking" src="https://img.shields.io/badge/tracking-none-1F1747?style=flat-square">
+  <img alt="No accounts" src="https://img.shields.io/badge/accounts-none-1F1747?style=flat-square">
 </p>
 
 **Gesto** turns your Android phone into a touchpad, keyboard, remote screen and media remote for your Linux desktop. It was called Waypad until 0.1.
 
 On the PC it talks to [Gesto for Linux](https://github.com/Frumorn12/gesto-linux), a small service that runs as your user. Both are made for Wayland, with Hyprland as the home desktop. The phone connects straight to your PC over an encrypted channel: there is no cloud in between.
 
-No accounts, no ads, no analytics.
+No accounts, no ads, no analytics of our own.
 
 <p align="center">
   <img src="docs/images/vetrina-1.png" alt="Your PCs, Add a PC and the touchpad, in the dark theme" width="100%">
@@ -103,7 +103,7 @@ To start apps from the Commands screen, list them in `~/.config/gesto/config.jso
 - **The control channel is encrypted**: P-256 key exchange (ECDH), a handshake signed by the PC's host key, HKDF and AES-GCM frames. The app pins the host key when it pairs and refuses to connect if it changes.
 - **The phone's token for each PC is encrypted** with a key kept in the Android Keystore, and left out of Android backups.
 - **The screen and sound stream** is protected by a one-time token but is not encrypted like the control channel: use it on your own network or through a VPN.
-- No accounts and no servers of ours: Gesto only talks to your PCs. The QR scanner uses Google's [ML Kit](https://developers.google.com/ml-kit/vision/barcode-scanning), which reads the code on the phone.
+- No accounts and no servers of ours: Gesto only talks to your PCs. The QR scanner uses Google's [ML Kit](https://developers.google.com/ml-kit/vision/barcode-scanning), which reads the code on the phone; Google says ML Kit may send anonymous usage statistics.
 
 Wire details are in [docs/PROTOCOL.md](docs/PROTOCOL.md), the app's structure in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
