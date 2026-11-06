@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import it.frumorn.gesto.SessionMode
 import it.frumorn.gesto.core.model.StreamProfile
 import it.frumorn.gesto.core.model.StreamSettings
 import it.frumorn.gesto.ui.theme.ThemeMode
@@ -28,6 +29,7 @@ class SettingsRepository(private val context: Context) {
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val ROUNDED_CORNERS = booleanPreferencesKey("rounded_corners")
         val FIRST_RUN = booleanPreferencesKey("first_run")
+        val LAST_MODE = stringPreferencesKey("last_mode")
     }
 
     val streamSettings: Flow<StreamSettings> = context.dataStore.data.map { prefs ->
@@ -56,6 +58,15 @@ class SettingsRepository(private val context: Context) {
         ThemeMode.entries.find { it.name == prefs[Keys.THEME_MODE] } ?: ThemeMode.System
     }
     val roundedCorners: Flow<Boolean> = context.dataStore.data.map { it[Keys.ROUNDED_CORNERS] ?: false }
+
+    /** The session mode the app reopens on; Touchpad until one is used, or for an unknown value. */
+    val lastMode: Flow<SessionMode> = context.dataStore.data.map { prefs ->
+        SessionMode.entries.find { it.name == prefs[Keys.LAST_MODE] } ?: SessionMode.Touchpad
+    }
+
+    suspend fun saveLastMode(mode: SessionMode) {
+        context.dataStore.edit { prefs -> prefs[Keys.LAST_MODE] = mode.name }
+    }
 
     suspend fun saveThemeMode(mode: ThemeMode) {
         context.dataStore.edit { prefs -> prefs[Keys.THEME_MODE] = mode.name }

@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Shield
-import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -19,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
+import it.frumorn.gesto.ui.components.GestoButton
 import it.frumorn.gesto.ui.components.SectionHeader
 import it.frumorn.gesto.ui.components.GestoCard
 import it.frumorn.gesto.ui.state.PairingActions
@@ -62,11 +61,12 @@ fun PairingScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(GestoTheme.spacing.xxl))
-            Button(onClick = actions.onPair, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Rounded.Shield, contentDescription = null)
-                Spacer(Modifier.width(GestoTheme.spacing.md))
-                Text("Pair securely")
-            }
+            GestoButton(
+                text = "Pair securely",
+                onClick = actions.onPair,
+                modifier = Modifier.fillMaxWidth(),
+                icon = Icons.Rounded.Shield,
+            )
         }
     }
 }

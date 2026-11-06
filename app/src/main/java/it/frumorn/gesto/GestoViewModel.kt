@@ -36,9 +36,12 @@ import it.frumorn.gesto.core.network.GestoInvite
 import it.frumorn.gesto.core.screen.RemoteScreenSessionEvent
 import it.frumorn.gesto.core.screen.RemoteScreenSessionMachine
 import it.frumorn.gesto.core.session.ReconnectPolicy
+import it.frumorn.gesto.core.session.launchTarget
 import it.frumorn.gesto.ui.text.UiText
 import it.frumorn.gesto.core.storage.SettingsRepository
 import it.frumorn.gesto.core.storage.TrustedHostStore
+import it.frumorn.gesto.ui.navigation.BackAction
+import it.frumorn.gesto.ui.navigation.backAction
 import it.frumorn.gesto.ui.theme.ThemeMode
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
@@ -47,9 +50,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -61,21 +65,39 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
-enum class Screen {
-    Onboarding,
-    Discovery,
-    Pairing,
-    Remote,
-    RemoteDisplay,
-    Keyboard,
-    Controls,
-    Settings,
-    TrustedHosts,
-    Troubleshooting,
+enum class Screen { Launch, Home, AddPc, Touchpad, Display, Commands, Settings, Advanced, Diagnostics }
+
+/** The three ways to drive a connected PC; the app reopens on the last one used. */
+enum class SessionMode(val screen: Screen) {
+    Touchpad(Screen.Touchpad),
+    Display(Screen.Display),
+    Commands(Screen.Commands),
 }
 
+/** Steps of "Add a PC": search the network, then approve a PIN, type a code, an address or scan a QR. */
+enum class AddPcStep { Search, Approval, Code, Address, Qr }
+
+/** The session mode this screen shows, null outside a session. */
+val Screen.sessionMode: SessionMode?
+    get() = SessionMode.entries.firstOrNull { it.screen == this }
+
+/** Touchpad, Display and Commands: the screens that live inside the session shell. */
+val Screen.isSession: Boolean
+    get() = sessionMode != null
+
+private val SettingsScreens = setOf(Screen.Settings, Screen.Advanced, Screen.Diagnostics)
+
 data class GestoUiState(
-    val screen: Screen = Screen.Onboarding,
+    val screen: Screen = Screen.Home,
+    /** Where Settings was opened from, so back returns there. */
+    val previousScreen: Screen? = null,
+    /** The keyboard sheet over the current session mode. */
+    val keyboardOpen: Boolean = false,
+    val quickMenuOpen: Boolean = false,
+    val addPcStep: AddPcStep = AddPcStep.Search,
+    val lastMode: SessionMode = SessionMode.Touchpad,
+    /** The PC the launch screen is connecting to. */
+    val launchHost: TrustedHost? = null,
     val connectionState: ConnectionState = ConnectionState.Disconnected,
     val discoveredHosts: List<DiscoveredHost> = emptyList(),
     val trustedHosts: List<TrustedHost> = emptyList(),
@@ -139,6 +161,7 @@ class GestoViewModel(
         const val HEALTH_PING_IDLE_MS = 1_000L
         const val HEALTH_PING_MAX_FAILURES = 2
         const val NOTICE_DEDUPE_MS = 3_000L
+        const val LAUNCH_TIMEOUT_MS = 6_000L
     }
 
     private val discovery = GestoDiscovery(application)
@@ -165,14 +188,22 @@ class GestoViewModel(
     )
     val state: StateFlow<GestoUiState> = _state
 
-    private val _notices = MutableSharedFlow<Notice>(extraBufferCapacity = 8)
-    /** One-shot messages for the user (shown as a snackbar). */
-    val notices: SharedFlow<Notice> = _notices.asSharedFlow()
+    // A channel, not a SharedFlow: a notice raised before the UI subscribes (a launch that fails
+    // while the splash is still up) must wait for it instead of being dropped.
+    private val _notices = Channel<Notice>(capacity = 8, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    /** One-shot messages for the user (shown as a snackbar), each delivered once. */
+    val notices: Flow<Notice> = _notices.receiveAsFlow()
     private val reconnectPolicy = ReconnectPolicy()
     private var reconnectJob: Deferred<Boolean>? = null
     private var lastInputAtMs = 0L
     private var lastNoticeText: UiText? = null
     private var lastNoticeAtMs = 0L
+    /** Id of the launch attempt the app is still waiting for; 0 when none. */
+    private var liveLaunch = 0L
+    private var launchCounter = 0L
+    private var launchTimeoutJob: Job? = null
+    /** The PC a "Try again" on a notice connects to. */
+    private var retryHostId: String? = null
 
     init {
         observeVideoSession()
@@ -204,82 +235,240 @@ class GestoViewModel(
                 _state.update { it.copy(remoteScreenGameMode = gameMode) }
             }
         }
-        restoreSessionState()
+        viewModelScope.launch {
+            settingsRepo.lastMode.collect { mode ->
+                _state.update { it.copy(lastMode = mode) }
+            }
+        }
+        // After process death the saved session wins; otherwise reopen on the last PC, if any.
+        if (!restoreSessionState()) {
+            launchTarget(store.load())?.let(::launchConnect)
+        }
     }
 
-    private fun restoreSessionState() {
-        val savedHostId = savedStateHandle.get<String>("connectedHostId")
+    /** Reconnects the session saved before process death. Returns false when there is none. */
+    private fun restoreSessionState(): Boolean {
+        val savedHostId = savedStateHandle.get<String>("connectedHostId") ?: return false
         val savedScreen = savedStateHandle.get<String>("screen")
-        if (savedHostId != null) {
-            val trustedHosts = store.load()
-            val host = trustedHosts.find { it.id == savedHostId }
-            if (host != null) {
-                Log.i(TAG, "session_restore found saved host=${host.hostName} screen=$savedScreen")
-                _state.update {
-                    it.copy(
-                        connectedHost = host,
-                        connectionState = ConnectionState.Connecting,
-                        screen = savedScreen?.let { s -> runCatching { Screen.valueOf(s) }.getOrNull() } ?: Screen.Remote,
-                        status = "Reconnecting to ${host.hostName}...",
-                    )
+        val host = store.load().find { it.id == savedHostId }
+        if (host == null) {
+            Log.w(TAG, "session_restore saved host not found in store")
+            savedStateHandle["connectedHostId"] = null
+            return false
+        }
+        Log.i(TAG, "session_restore found saved host=${host.hostName} screen=$savedScreen")
+        retryHostId = host.id
+        val screen = savedScreen
+            ?.let { s -> runCatching { Screen.valueOf(s) }.getOrNull() }
+            ?.takeIf { it.isSession }
+            ?: Screen.Touchpad
+        _state.update {
+            it.copy(
+                connectedHost = host,
+                connectionState = ConnectionState.Connecting,
+                screen = screen,
+                status = "Reconnecting to ${host.hostName}...",
+            )
+        }
+        viewModelScope.launch {
+            runCatching { client.connect(host) }
+                .onSuccess { capabilities ->
+                    Log.i(TAG, "session_restore reconnected host=${host.hostName}")
+                    _state.update {
+                        it.copy(
+                            capabilities = capabilities,
+                            connectionState = ConnectionState.Connected,
+                            status = "Reconnected to ${host.hostName}",
+                            error = null,
+                        )
+                    }
+                    publishCurrentExternalDevices()
                 }
-                viewModelScope.launch {
-                    runCatching { client.connect(host) }
-                        .onSuccess { capabilities ->
-                            Log.i(TAG, "session_restore reconnected host=${host.hostName}")
-                            _state.update {
-                                it.copy(
-                                    capabilities = capabilities,
-                                    connectionState = ConnectionState.Connected,
-                                    status = "Reconnected to ${host.hostName}",
-                                    error = null,
-                                )
-                            }
-                            publishCurrentExternalDevices()
-                        }
-                        .onFailure { throwable ->
-                            Log.w(TAG, "session_restore reconnect failed", throwable)
-                            _state.update {
-                                it.copy(
-                                    connectionState = ConnectionState.Disconnected,
-                                    connectedHost = null,
-                                    screen = Screen.Discovery,
-                                    status = "Reconnect failed. Tap to retry.",
-                                    error = throwable.message,
-                                )
-                            }
-                            savedStateHandle["connectedHostId"] = null
-                            savedStateHandle["screen"] = null
-                        }
+                .onFailure { throwable ->
+                    if (throwable is CancellationException) throw throwable
+                    Log.w(TAG, "session_restore reconnect failed", throwable)
+                    _state.update {
+                        it.copy(
+                            connectionState = ConnectionState.Disconnected,
+                            connectedHost = null,
+                            screen = Screen.Home,
+                            keyboardOpen = false,
+                            quickMenuOpen = false,
+                            status = "Ready",
+                            error = null,
+                        )
+                    }
+                    savedStateHandle["connectedHostId"] = null
+                    savedStateHandle["screen"] = null
+                    emitNotice(Notice(connectFailureText(host, throwable), NoticeAction.Retry))
                 }
-            } else {
-                Log.w(TAG, "session_restore saved host not found in store")
-                savedStateHandle["connectedHostId"] = null
+        }
+        return true
+    }
+
+    /**
+     * Opens the launch screen and connects to [host], giving up after [LAUNCH_TIMEOUT_MS]: then the
+     * user lands on the PCs list with a notice. A socket can take longer than that to give up, so the
+     * attempt is not awaited past the deadline; whatever it opens afterwards is dropped.
+     */
+    private fun launchConnect(host: TrustedHost) {
+        abandonLaunch()
+        val attempt = ++launchCounter
+        liveLaunch = attempt
+        retryHostId = host.id
+        Log.i(TAG, "launch_connect host=${host.hostName} address=${host.address}:${host.port}")
+        _state.update {
+            it.copy(
+                screen = Screen.Launch,
+                launchHost = host,
+                connectionState = ConnectionState.Connecting,
+                keyboardOpen = false,
+                quickMenuOpen = false,
+                status = "Connecting to ${host.hostName}...",
+                error = null,
+            )
+        }
+        viewModelScope.launch {
+            // Read in parallel with the handshake so the saved mode is known when it ends.
+            val savedMode = async { runCatching { settingsRepo.lastMode.first() }.getOrDefault(SessionMode.Touchpad) }
+            val result = runCatching { client.connect(host) }
+            if (result.exceptionOrNull() is CancellationException) return@launch
+            val mode = if (result.isSuccess) savedMode.await() else SessionMode.Touchpad
+            if (liveLaunch != attempt) {
+                // Timed out, or the user chose another PC: nobody wants this channel any more.
+                if (result.isSuccess) releaseLateLaunchChannel()
+                return@launch
+            }
+            liveLaunch = 0L
+            launchTimeoutJob?.cancel()
+            launchTimeoutJob = null
+            result
+                .onSuccess { capabilities -> onLaunchConnected(host, capabilities, mode) }
+                .onFailure { onLaunchFailed(host, it) }
+        }
+        launchTimeoutJob = viewModelScope.launch {
+            delay(LAUNCH_TIMEOUT_MS)
+            if (liveLaunch != attempt) return@launch
+            Log.w(TAG, "launch_timeout host=${host.hostName}")
+            liveLaunch = 0L
+            launchTimeoutJob = null
+            onLaunchFailed(host, null)
+        }
+    }
+
+    private fun onLaunchConnected(host: TrustedHost, capabilities: CapabilitySummary, mode: SessionMode) {
+        Log.i(TAG, "connection_state=connected launch=true host=${host.hostName} mode=$mode")
+        val updated = host.copy(lastConnectedAt = System.currentTimeMillis())
+        store.upsert(updated)
+        savedStateHandle["connectedHostId"] = updated.id
+        _state.update {
+            it.copy(
+                trustedHosts = store.load(),
+                connectedHost = updated,
+                launchHost = null,
+                capabilities = capabilities,
+                connectionState = ConnectionState.Connected,
+                status = "Connected to ${host.hostName}",
+                error = null,
+            )
+        }
+        go(mode.screen)
+    }
+
+    private fun onLaunchFailed(host: TrustedHost, error: Throwable?) {
+        Log.w(TAG, "launch_failed host=${host.hostName}", error)
+        _state.update {
+            it.copy(
+                screen = Screen.Home,
+                launchHost = null,
+                connectionState = ConnectionState.Disconnected,
+                status = "Ready",
+                error = null,
+            )
+        }
+        emitNotice(Notice(connectFailureText(host, error), NoticeAction.Retry))
+    }
+
+    /** Stops waiting for the launch connection; the attempt ends in the background and is dropped. */
+    private fun abandonLaunch() {
+        if (liveLaunch == 0L) return
+        Log.i(TAG, "launch_abandoned")
+        liveLaunch = 0L
+        launchTimeoutJob?.cancel()
+        launchTimeoutJob = null
+        _state.update {
+            it.copy(
+                launchHost = null,
+                connectionState = if (it.connectedHost == null) ConnectionState.Disconnected else it.connectionState,
+            )
+        }
+    }
+
+    /**
+     * A launch connection that arrived after the app stopped waiting. Closed unless another
+     * connection or pairing has been started since: that one owns the client now.
+     */
+    private fun releaseLateLaunchChannel() {
+        val s = _state.value
+        val busy = s.connectedHost != null || liveLaunch != 0L ||
+            s.connectionState == ConnectionState.Connecting || s.connectionState == ConnectionState.Pairing
+        if (busy) return
+        Log.i(TAG, "launch_late_channel_closed")
+        client.close()
+    }
+
+    /** "Choose another PC" on the launch screen. */
+    fun cancelLaunch() {
+        go(Screen.Home)
+    }
+
+    /** Connects again to the PC of the last failed or lost connection (the notice's "Try again"). */
+    fun retryLastConnection() {
+        if (_state.value.connectedHost != null) return
+        val host = retryHostId?.let { id -> store.load().find { it.id == id } } ?: return
+        launchConnect(host)
+    }
+
+    fun onNoticeAction(action: NoticeAction) {
+        when (action) {
+            NoticeAction.Retry -> retryLastConnection()
+            NoticeAction.OpenPcs -> go(Screen.Home)
+            NoticeAction.UseCode -> {
+                go(Screen.AddPc)
+                setAddPcStep(AddPcStep.Code)
             }
         }
     }
 
     fun go(screen: Screen) {
+        if (screen != Screen.Launch) abandonLaunch()
         val wasCapturingExternalInput = shouldCaptureExternalInput(_state.value)
         val previous = _state.value.screen
-        if (previous == Screen.RemoteDisplay && screen != Screen.RemoteDisplay) {
+        if (previous == Screen.Display && screen != Screen.Display) {
             stopScreenStream()
         }
-        if (screen == Screen.Remote || screen == Screen.RemoteDisplay) {
-            savedStateHandle["screen"] = screen.name
-        } else if (screen == Screen.Discovery || screen == Screen.Onboarding) {
+        if (screen.isSession) {
             savedStateHandle["screen"] = screen.name
         }
+        screen.sessionMode?.let { mode -> viewModelScope.launch { settingsRepo.saveLastMode(mode) } }
         _state.update {
             it.copy(
                 screen = screen,
+                previousScreen = when {
+                    screen == Screen.Settings && previous !in SettingsScreens -> previous
+                    screen in SettingsScreens -> it.previousScreen
+                    else -> null
+                },
+                keyboardOpen = false,
+                quickMenuOpen = false,
+                lastMode = screen.sessionMode ?: it.lastMode,
                 error = null,
-                remoteScreenFullscreen = if (screen == Screen.RemoteDisplay) {
+                remoteScreenFullscreen = if (screen == Screen.Display) {
                     it.remoteScreenFullscreen
                 } else {
                     false
                 },
-                remoteScreenControlsVisible = if (screen == Screen.RemoteDisplay) {
+                remoteScreenControlsVisible = if (screen == Screen.Display) {
                     it.remoteScreenControlsVisible
                 } else {
                     true
@@ -289,9 +478,50 @@ class GestoViewModel(
         if (!wasCapturingExternalInput && shouldCaptureExternalInput(_state.value)) {
             publishCurrentExternalDevices()
         }
-        if (screen == Screen.RemoteDisplay && _state.value.screenSources.isEmpty()) {
+        if (screen == Screen.Display && _state.value.screenSources.isEmpty()) {
             loadScreenSources()
         }
+    }
+
+    /**
+     * The system back button. Returns false when the app should close: only from the PCs list or
+     * the launch screen, never from a state in between.
+     */
+    fun back(): Boolean {
+        val s = _state.value
+        // The old fullscreen remote screen keeps its own exit until the quick menu replaces it.
+        if (s.screen == Screen.Display && s.remoteScreenFullscreen && !s.keyboardOpen && !s.quickMenuOpen) {
+            setRemoteScreenFullscreen(false)
+            return true
+        }
+        when (val action = backAction(s.screen, s.keyboardOpen, s.quickMenuOpen, s.addPcStep, s.previousScreen)) {
+            BackAction.CloseKeyboard -> setKeyboardOpen(false)
+            BackAction.CloseQuickMenu -> setQuickMenuOpen(false)
+            BackAction.OpenQuickMenu -> setQuickMenuOpen(true)
+            is BackAction.AddPcStepTo -> setAddPcStep(action.step)
+            is BackAction.GoTo -> {
+                // Settings opened from a session that has since ended: there is nothing to go back to.
+                val target = if (action.screen.isSession && s.connectedHost == null) Screen.Home else action.screen
+                go(target)
+            }
+            BackAction.ExitApp -> return false
+        }
+        return true
+    }
+
+    fun setKeyboardOpen(open: Boolean) {
+        _state.update {
+            val allowed = open && it.screen.isSession
+            it.copy(keyboardOpen = allowed, quickMenuOpen = if (allowed) false else it.quickMenuOpen)
+        }
+    }
+
+    fun setQuickMenuOpen(open: Boolean) {
+        _state.update { it.copy(quickMenuOpen = open && it.screen.isSession) }
+    }
+
+    fun setAddPcStep(step: AddPcStep) {
+        _state.update { it.copy(addPcStep = step, error = null) }
     }
 
     fun applyInvite(raw: String) {
@@ -301,6 +531,7 @@ class GestoViewModel(
         }
         runCatching { GestoInvite.parse(raw) }
             .onSuccess { invite ->
+                abandonLaunch()
                 handledInvitePayload = raw
                 pendingInvite = invite
                 Log.i(
@@ -313,7 +544,8 @@ class GestoViewModel(
                         pairingCode = invite.pairingCode,
                         manualAddress = invite.address,
                         manualPort = invite.port.toString(),
-                        screen = Screen.Pairing,
+                        screen = Screen.AddPc,
+                        addPcStep = AddPcStep.Code,
                         status = "Loaded ${invite.route} invite for ${invite.hostName.ifBlank { invite.address }}",
                         error = null,
                     )
@@ -322,9 +554,11 @@ class GestoViewModel(
             }
             .onFailure { throwable ->
                 Log.w(TAG, "qr_invite_failed message=${throwable.message}", throwable)
+                abandonLaunch()
                 _state.update {
                     it.copy(
-                        screen = Screen.Discovery,
+                        screen = Screen.AddPc,
+                        addPcStep = AddPcStep.Search,
                         error = throwable.message ?: "Could not parse Gesto invite",
                     )
                 }
@@ -536,14 +770,22 @@ class GestoViewModel(
     }
 
     fun revealRemoteScreenControls(reason: String) {
-        if (_state.value.screen == Screen.RemoteDisplay && _state.value.remoteScreenFullscreen) {
+        if (_state.value.screen == Screen.Display && _state.value.remoteScreenFullscreen) {
             setRemoteScreenControlsVisible(true, reason)
         }
     }
 
     fun startDiscovery() {
+        abandonLaunch()
         _state.update {
-            it.copy(screen = Screen.Discovery, connectionState = it.stateDuringDiscovery(ConnectionState.Discovering), status = "Scanning LAN...", error = null)
+            it.copy(
+                screen = Screen.AddPc,
+                addPcStep = AddPcStep.Search,
+                previousScreen = null,
+                connectionState = it.stateDuringDiscovery(ConnectionState.Discovering),
+                status = "Scanning LAN...",
+                error = null,
+            )
         }
         viewModelScope.launch {
             runCatching { discovery.discover() }
@@ -562,7 +804,9 @@ class GestoViewModel(
     }
 
     fun selectHost(host: DiscoveredHost) {
-        _state.update { it.copy(selectedHost = host, screen = Screen.Pairing, pairingCode = "", error = null) }
+        _state.update {
+            it.copy(selectedHost = host, screen = Screen.AddPc, addPcStep = AddPcStep.Code, pairingCode = "", error = null)
+        }
     }
 
     fun useManualHost() {
@@ -610,20 +854,19 @@ class GestoViewModel(
                 Log.i(TAG, "connection_state=connected paired_host=${trusted.hostName} input_backend=${capabilities.inputBackend}")
                 pendingInvite = null
                 store.upsert(trusted)
+                retryHostId = trusted.id
                 savedStateHandle["connectedHostId"] = trusted.id
-                savedStateHandle["screen"] = Screen.Remote.name
                 _state.update {
                     it.copy(
                         trustedHosts = store.load(),
                         connectedHost = trusted,
                         capabilities = capabilities,
                         connectionState = ConnectionState.Connected,
-                        screen = Screen.Remote,
                         status = "Connected to ${trusted.hostName}",
                         error = null,
                     )
                 }
-                publishCurrentExternalDevices()
+                go(Screen.Touchpad)
             }.onFailure { fail("Pairing failed", it, ErrorContext.Pairing, host.port) }
         }
     }
@@ -687,6 +930,8 @@ class GestoViewModel(
 
     fun connect(host: TrustedHost) {
         Log.i(TAG, "connection_state=connecting host=${host.hostName} address=${host.address}:${host.port}")
+        abandonLaunch()
+        retryHostId = host.id
         _state.update { it.copy(connectionState = ConnectionState.Connecting, status = "Connecting to ${host.hostName}...", error = null) }
         viewModelScope.launch {
             runCatching { client.connect(host) }
@@ -695,18 +940,16 @@ class GestoViewModel(
                     val updated = host.copy(lastConnectedAt = System.currentTimeMillis())
                     store.upsert(updated)
                     savedStateHandle["connectedHostId"] = updated.id
-                    savedStateHandle["screen"] = Screen.Remote.name
                     _state.update {
                         it.copy(
                             trustedHosts = store.load(),
                             connectedHost = updated,
                             capabilities = capabilities,
                             connectionState = ConnectionState.Connected,
-                            screen = Screen.Remote,
                             status = "Connected to ${host.hostName}",
                         )
                     }
-                    publishCurrentExternalDevices()
+                    go(_state.value.lastMode.screen)
                 }
                 .onFailure { fail("Connection failed", it, ErrorContext.Connecting, host.port) }
         }
@@ -724,10 +967,15 @@ class GestoViewModel(
         savedStateHandle["connectedHostId"] = null
         savedStateHandle["screen"] = null
         _state.update {
+            // A lost link only moves the user out of the session; Settings or Add a PC stay put.
+            val home = cancelReconnect || it.screen.isSession || it.screen == Screen.Launch
             it.copy(
                 connectionState = ConnectionState.Disconnected,
                 connectedHost = null,
-                screen = Screen.Discovery,
+                screen = if (home) Screen.Home else it.screen,
+                previousScreen = if (home) null else it.previousScreen,
+                keyboardOpen = false,
+                quickMenuOpen = false,
                 status = "Disconnected",
                 reconnecting = false,
                 latencyMs = null,
@@ -1257,7 +1505,7 @@ class GestoViewModel(
         if (notice.text == lastNoticeText && now - lastNoticeAtMs < NOTICE_DEDUPE_MS) return
         lastNoticeText = notice.text
         lastNoticeAtMs = now
-        _notices.tryEmit(notice)
+        _notices.trySend(notice)
     }
 
     private fun resolve(text: UiText): String = when (text) {
@@ -1318,14 +1566,23 @@ class GestoViewModel(
             attempt++
         }
         // Gave up: back to the list, with a message that says why.
-        val text = lastError
-            ?.takeIf { it is GestoApiException || it.message?.contains("fingerprint", ignoreCase = true) == true }
-            ?.let { ErrorTranslator.translate(it, ErrorContext.Connecting, host.port) }
+        val text = daemonVerdict(lastError, host.port)
             ?: UiText.Res(R.string.error_connection_lost, listOf(host.hostName))
         performDisconnect(cancelReconnect = false)
         emitNotice(Notice(text, NoticeAction.Retry))
         return false
     }
+
+    /**
+     * The daemon's own reason when it turned the connection down (session expired, identity
+     * changed...); null when the PC simply did not answer.
+     */
+    private fun daemonVerdict(error: Throwable?, port: Int): UiText? = error
+        ?.takeIf { it is GestoApiException || it.message?.contains("fingerprint", ignoreCase = true) == true }
+        ?.let { ErrorTranslator.translate(it, ErrorContext.Connecting, port) }
+
+    private fun connectFailureText(host: TrustedHost, error: Throwable?): UiText =
+        daemonVerdict(error, host.port) ?: UiText.Res(R.string.notice_pc_not_answering, listOf(host.hostName))
 
     /** Pings the PC every few seconds while connected and idle; two misses in a row mean a dead link. */
     private suspend fun runHealthPing() {
@@ -1616,10 +1873,12 @@ class GestoViewModel(
             .onFailure { throwable ->
                 if (throwable is CancellationException) throw throwable
                 Log.w(TAG, "transport_send_failed type=$label", throwable)
-                if (throwable.isTransportFailure() && reconnectCurrentHost()) {
-                    runCatching { block() }.onFailure { reportCommandFailure(it) }
-                } else if (!throwable.isTransportFailure()) {
-                    reportCommandFailure(throwable)
+                when {
+                    !throwable.isTransportFailure() -> reportCommandFailure(throwable)
+                    // The request may already have run on the PC: bring the link back, but never
+                    // send it twice (a doubled click or a doubled letter).
+                    throwable.mayHaveRun() -> reconnectCurrentHost()
+                    reconnectCurrentHost() -> runCatching { block() }.onFailure { reportCommandFailure(it) }
                 }
             }
     }
@@ -1642,7 +1901,7 @@ class GestoViewModel(
 
 private fun shouldCaptureExternalInput(state: GestoUiState): Boolean =
     state.connectionState == ConnectionState.Connected &&
-        (state.screen == Screen.Remote || state.screen == Screen.RemoteDisplay)
+        (state.screen == Screen.Touchpad || state.screen == Screen.Display)
 
 private fun shouldForwardExternalDeviceConnected(
     state: GestoUiState,
@@ -1660,7 +1919,7 @@ private fun shouldForwardExternalInput(state: GestoUiState, event: ExternalInput
 
 private fun shouldForwardControllerInput(state: GestoUiState): Boolean =
     state.connectionState == ConnectionState.Connected &&
-        state.screen == Screen.RemoteDisplay &&
+        state.screen == Screen.Display &&
         (state.remoteScreenFullscreen || state.remoteScreenGameMode)
 
 private fun shouldConsumeControllerLocally(state: GestoUiState, event: ExternalInputEvent): Boolean =

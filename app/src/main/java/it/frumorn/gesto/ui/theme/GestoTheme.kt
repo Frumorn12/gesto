@@ -21,11 +21,7 @@ fun GestoTheme(
     roundedCorners: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val dark = when (mode) {
-        ThemeMode.System -> isSystemInDarkTheme()
-        ThemeMode.Light -> false
-        ThemeMode.Dark -> true
-    }
+    val dark = mode.isDark()
     CompositionLocalProvider(
         LocalGestoSpacing provides GestoSpacing(),
         LocalGestoExtraShapes provides
@@ -40,6 +36,14 @@ fun GestoTheme(
             content = content,
         )
     }
+}
+
+/** Whether this mode resolves to the dark palette right now. */
+@Composable
+fun ThemeMode.isDark(): Boolean = when (this) {
+    ThemeMode.System -> isSystemInDarkTheme()
+    ThemeMode.Light -> false
+    ThemeMode.Dark -> true
 }
 
 /** Accessors for the Gesto design tokens that Material 3 does not model publicly. */

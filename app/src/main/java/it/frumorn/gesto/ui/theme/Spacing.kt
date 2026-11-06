@@ -63,6 +63,23 @@ data class GestoSpacing(
 
     /** Width reserved for the compact "Full" action in the stream setup card. */
     val compactActionWidth: Dp = 120.dp
+
+    /** Line icons in the session bars. */
+    val barIconSize: Dp = 22.dp
+
+    /** The g written on the launch screen. */
+    val launchMarkSize: Dp = 104.dp
+
+    /** Indeterminate loading bar. */
+    val loadingBarWidth: Dp = 180.dp
+    val loadingBarHeight: Dp = 3.dp
+
+    /** Floating quick menu panel and its icons. */
+    val quickMenuWidth: Dp = 240.dp
+    val menuIconSize: Dp = 20.dp
+
+    /** Tallest the keyboard sheet grows before its content scrolls. */
+    val keyboardSheetMaxHeight: Dp = 420.dp
 }
 
 val LocalGestoSpacing = staticCompositionLocalOf { GestoSpacing() }

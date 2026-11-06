@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -16,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import it.frumorn.gesto.core.model.formatFps
 import it.frumorn.gesto.ui.components.DiagnosticRow
+import it.frumorn.gesto.ui.components.GestoButton
 import it.frumorn.gesto.ui.components.SectionHeader
 import it.frumorn.gesto.ui.components.GestoCard
 import it.frumorn.gesto.ui.components.capabilityLabel
@@ -40,11 +40,12 @@ fun TroubleshootingScreen(
                 "Diagnostics",
                 "Wayland support is capability driven. Unsupported actions fail with a host reason.",
             )
-            Button(onClick = actions.onRefreshCapabilities, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Rounded.Refresh, contentDescription = null)
-                Spacer(Modifier.width(GestoTheme.spacing.md))
-                Text("Refresh capabilities")
-            }
+            GestoButton(
+                text = "Refresh capabilities",
+                onClick = actions.onRefreshCapabilities,
+                modifier = Modifier.fillMaxWidth(),
+                icon = Icons.Rounded.Refresh,
+            )
         }
         item {
             val capabilities = state.capabilities

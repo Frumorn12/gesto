@@ -7,6 +7,9 @@ import it.frumorn.gesto.Screen
 import it.frumorn.gesto.GestoUiState
 import it.frumorn.gesto.GestoViewModel
 import it.frumorn.gesto.core.externalinput.ExternalInputDeviceClass
+import it.frumorn.gesto.core.model.ConnectionState
+import it.frumorn.gesto.core.session.isLocalNetworkAddress
+import it.frumorn.gesto.sessionMode
 import it.frumorn.gesto.ui.state.ControlsActions
 import it.frumorn.gesto.ui.state.ControlsUiState
 import it.frumorn.gesto.ui.state.DiagnosticsActions
@@ -14,16 +17,18 @@ import it.frumorn.gesto.ui.state.DiagnosticsUiState
 import it.frumorn.gesto.ui.state.DiscoveryActions
 import it.frumorn.gesto.ui.state.DiscoveryUiState
 import it.frumorn.gesto.ui.state.KeyboardActions
-import it.frumorn.gesto.ui.state.OnboardingActions
+import it.frumorn.gesto.ui.state.LaunchActions
+import it.frumorn.gesto.ui.state.LaunchUiState
 import it.frumorn.gesto.ui.state.PairingActions
 import it.frumorn.gesto.ui.state.PairingUiState
 import it.frumorn.gesto.ui.state.RemoteDisplayActions
 import it.frumorn.gesto.ui.state.RemoteDisplayUiState
 import it.frumorn.gesto.ui.state.RemotePadActions
 import it.frumorn.gesto.ui.state.RemotePadUiState
+import it.frumorn.gesto.ui.state.SessionActions
+import it.frumorn.gesto.ui.state.SessionUiState
 import it.frumorn.gesto.ui.state.SettingsActions
 import it.frumorn.gesto.ui.state.SettingsUiState
-import it.frumorn.gesto.ui.state.ShellUiState
 import it.frumorn.gesto.ui.state.TrustedHostsActions
 import it.frumorn.gesto.ui.state.TrustedHostsUiState
 
@@ -37,8 +42,10 @@ import it.frumorn.gesto.ui.state.TrustedHostsUiState
 class GestoActions(
     val onNavigate: (Screen) -> Unit = {},
     val onOpenSettings: () -> Unit = {},
-    val onExitFullscreen: () -> Unit = {},
-    val onboarding: OnboardingActions = OnboardingActions(),
+    /** The system back button; false means the app should close. */
+    val onBack: () -> Boolean = { true },
+    val launch: LaunchActions = LaunchActions(),
+    val session: SessionActions = SessionActions(),
     val discovery: DiscoveryActions = DiscoveryActions(),
     val pairing: PairingActions = PairingActions(),
     val remotePad: RemotePadActions = RemotePadActions(),
@@ -56,10 +63,15 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
     GestoActions(
         onNavigate = viewModel::go,
         onOpenSettings = { viewModel.go(Screen.Settings) },
-        onExitFullscreen = { viewModel.setRemoteScreenFullscreen(false) },
-        onboarding = OnboardingActions(
-            onDiscoverHosts = viewModel::startDiscovery,
-            onOpenTrustedHosts = { viewModel.go(Screen.TrustedHosts) },
+        onBack = viewModel::back,
+        launch = LaunchActions(onChooseAnotherPc = viewModel::cancelLaunch),
+        session = SessionActions(
+            onBackToPcs = { viewModel.go(Screen.Home) },
+            onOpenSettings = { viewModel.go(Screen.Settings) },
+            onSelectMode = { mode -> viewModel.go(mode.screen) },
+            onSetKeyboardOpen = viewModel::setKeyboardOpen,
+            onSetQuickMenuOpen = viewModel::setQuickMenuOpen,
+            onDisconnect = viewModel::disconnect,
         ),
         discovery = DiscoveryActions(
             onScanLan = viewModel::startDiscovery,
@@ -121,7 +133,8 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
             onToggleStats = viewModel::toggleStreamStats,
             onToggleHaptics = viewModel::toggleHaptics,
             onSetGameMode = viewModel::setRemoteScreenGameMode,
-            onOpenTrustedHosts = { viewModel.go(Screen.TrustedHosts) },
+            onOpenTrustedHosts = { viewModel.go(Screen.Home) },
+            onOpenDiagnostics = { viewModel.go(Screen.Diagnostics) },
             onDisconnect = viewModel::disconnect,
         ),
         trustedHosts = TrustedHostsActions(
@@ -135,10 +148,20 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
     )
 }
 
-internal fun GestoUiState.toShellState(): ShellUiState = ShellUiState(
-    hostName = connectedHost?.hostName,
-    status = status,
-    error = error,
+internal fun GestoUiState.toSessionState(): SessionUiState = SessionUiState(
+    hostName = connectedHost?.hostName.orEmpty(),
+    reconnecting = reconnecting || connectionState != ConnectionState.Connected,
+    latencyMs = latencyMs,
+    mode = screen.sessionMode ?: lastMode,
+    keyboardOpen = keyboardOpen,
+    quickMenuOpen = quickMenuOpen,
+    fullscreen = screen == Screen.Display && remoteScreenFullscreen,
+)
+
+internal fun GestoUiState.toLaunchState(): LaunchUiState = LaunchUiState(
+    hostName = launchHost?.hostName.orEmpty(),
+    mode = lastMode,
+    sameNetwork = launchHost?.address?.let(::isLocalNetworkAddress) ?: false,
 )
 
 internal fun GestoUiState.toDiscoveryState(): DiscoveryUiState = DiscoveryUiState(

@@ -4,12 +4,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import it.frumorn.gesto.R
 import it.frumorn.gesto.core.model.TrustedHost
+import it.frumorn.gesto.ui.components.GestoButton
+import it.frumorn.gesto.ui.components.GestoIcons
 import it.frumorn.gesto.ui.components.SectionHeader
 import it.frumorn.gesto.ui.components.TrustedHostCard
 import it.frumorn.gesto.ui.state.TrustedHostsActions
@@ -17,7 +19,7 @@ import it.frumorn.gesto.ui.state.TrustedHostsUiState
 import it.frumorn.gesto.ui.theme.GestoPreviewSurface
 import it.frumorn.gesto.ui.theme.GestoTheme
 
-/** Pinned host identities kept in the Keystore-protected store. */
+/** The paired PCs (old list, shown as "Your PCs" until the new home replaces it). */
 @Composable
 fun TrustedHostsScreen(
     state: TrustedHostsUiState,
@@ -29,13 +31,13 @@ fun TrustedHostsScreen(
         verticalArrangement = Arrangement.spacedBy(GestoTheme.spacing.xl),
     ) {
         item {
-            SectionHeader(
-                "Trusted Hosts",
-                "Pinned host identities stored with Android Keystore protected encryption.",
+            SectionHeader(stringResource(R.string.nav_your_pcs), stringResource(R.string.home_subtitle))
+            GestoButton(
+                text = stringResource(R.string.home_add_pc),
+                onClick = actions.onDiscoverNewHost,
+                modifier = Modifier.fillMaxWidth(),
+                icon = GestoIcons.Plus,
             )
-            Button(onClick = actions.onDiscoverNewHost, modifier = Modifier.fillMaxWidth()) {
-                Text("Discover new host")
-            }
         }
         items(state.trustedHosts) { host ->
             TrustedHostCard(

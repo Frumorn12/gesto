@@ -1,6 +1,7 @@
 package it.frumorn.gesto.ui.state
 
 import androidx.compose.runtime.Immutable
+import it.frumorn.gesto.SessionMode
 import it.frumorn.gesto.core.input.RemoteGestureMode
 import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.DiscoveredHost
@@ -15,6 +16,22 @@ import it.frumorn.gesto.core.model.TrustedHost
  * call. The real implementations are wired once, in
  * [it.frumorn.gesto.ui.rememberGestoActions].
  */
+
+@Immutable
+data class SessionActions(
+    /** Back arrow: the PCs list, staying connected. */
+    val onBackToPcs: () -> Unit = {},
+    val onOpenSettings: () -> Unit = {},
+    val onSelectMode: (SessionMode) -> Unit = {},
+    val onSetKeyboardOpen: (Boolean) -> Unit = {},
+    val onSetQuickMenuOpen: (Boolean) -> Unit = {},
+    val onDisconnect: () -> Unit = {},
+)
+
+@Immutable
+data class LaunchActions(
+    val onChooseAnotherPc: () -> Unit = {},
+)
 
 @Immutable
 data class OnboardingActions(
@@ -94,6 +111,7 @@ data class SettingsActions(
     val onToggleHaptics: () -> Unit = {},
     val onSetGameMode: (Boolean) -> Unit = {},
     val onOpenTrustedHosts: () -> Unit = {},
+    val onOpenDiagnostics: () -> Unit = {},
     val onDisconnect: () -> Unit = {},
 )
 

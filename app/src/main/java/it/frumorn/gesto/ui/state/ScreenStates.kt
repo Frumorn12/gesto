@@ -1,6 +1,7 @@
 package it.frumorn.gesto.ui.state
 
 import androidx.compose.runtime.Immutable
+import it.frumorn.gesto.SessionMode
 import it.frumorn.gesto.core.externalinput.ExternalInputDeviceSummary
 import it.frumorn.gesto.core.input.RemoteGestureMode
 import it.frumorn.gesto.core.model.CapabilitySummary
@@ -18,11 +19,26 @@ import it.frumorn.gesto.core.model.TrustedHost
  * is what makes every screen previewable and unit-testable in isolation.
  */
 
+/** Top and bottom bars of a connected session. */
 @Immutable
-data class ShellUiState(
-    val hostName: String? = null,
-    val status: String = "Ready",
-    val error: String? = null,
+data class SessionUiState(
+    val hostName: String = "",
+    val reconnecting: Boolean = false,
+    /** Round trip of the last health ping; hidden while unknown. */
+    val latencyMs: Int? = null,
+    val mode: SessionMode = SessionMode.Touchpad,
+    val keyboardOpen: Boolean = false,
+    val quickMenuOpen: Boolean = false,
+    /** The remote screen fills the display: no bars at all. */
+    val fullscreen: Boolean = false,
+)
+
+@Immutable
+data class LaunchUiState(
+    val hostName: String = "",
+    val mode: SessionMode = SessionMode.Touchpad,
+    /** The PC's address is on the home network. */
+    val sameNetwork: Boolean = false,
 )
 
 @Immutable

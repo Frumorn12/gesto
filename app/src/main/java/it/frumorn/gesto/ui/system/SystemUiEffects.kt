@@ -8,6 +8,9 @@ import android.os.Build
 import android.util.Log
 import android.view.WindowInsets
 import android.view.WindowInsetsController
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
@@ -18,6 +21,30 @@ import androidx.compose.ui.platform.LocalView
  * Moved out of `GestoApp.kt` unchanged: the logging tags and the exact ordering of the window flag
  * writes are relied upon by the field diagnostics.
  */
+
+// Same scrims enableEdgeToEdge() uses by default, so three-button navigation stays readable.
+private val LightNavigationScrim = android.graphics.Color.argb(0xE6, 0xFF, 0xFF, 0xFF)
+private val DarkNavigationScrim = android.graphics.Color.argb(0x80, 0x1B, 0x1B, 0x1B)
+
+/**
+ * Status and navigation bar icons follow the app theme (Light/Dark/System), not the system night
+ * mode: a light app on a dark phone would otherwise get white icons on a white bar.
+ */
+@Composable
+fun SystemBarsThemeEffect(dark: Boolean) {
+    val view = LocalView.current
+    DisposableEffect(dark, view) {
+        val activity = view.context.findActivity() as? ComponentActivity
+        activity?.enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT,
+            ) { dark },
+            navigationBarStyle = SystemBarStyle.auto(LightNavigationScrim, DarkNavigationScrim) { dark },
+        )
+        onDispose {}
+    }
+}
 
 /** Grabs the physical mouse/touchpad so its deltas can be forwarded to the host. */
 @Composable

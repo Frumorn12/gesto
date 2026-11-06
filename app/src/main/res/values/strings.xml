@@ -4,6 +4,45 @@
 
     <string name="notice_reconnected">Connection restored</string>
 
+    <string name="notice_pc_not_answering">%1$s isn\'t answering.</string>
+    <string name="action_retry">Try again</string>
+    <string name="action_use_code">Use a code</string>
+    <string name="action_back">Back</string>
+    <string name="action_settings">Settings</string>
+
+    <string name="nav_your_pcs">Your PCs</string>
+    <string name="home_subtitle">Pick the PC you want to control.</string>
+    <string name="home_add_pc">Add a PC</string>
+    <string name="settings_diagnostics">Diagnostics</string>
+
+    <string name="launch_connecting_to">Connecting to</string>
+    <string name="launch_choose_another">Choose another PC</string>
+    <string name="launch_subtitle_lan">Same Wi-Fi network · reopening %1$s</string>
+    <string name="launch_subtitle">Reopening %1$s</string>
+    <string name="launch_mode_touchpad">the Touchpad</string>
+    <string name="launch_mode_display">the Screen</string>
+    <string name="launch_mode_commands">Commands</string>
+
+    <string name="session_connected">Connected</string>
+    <string name="session_reconnecting">Reconnecting…</string>
+    <string name="session_latency">%1$d ms</string>
+
+    <string name="dock_touchpad">Touchpad</string>
+    <string name="dock_screen">Screen</string>
+    <string name="dock_keyboard">Keyboard</string>
+    <string name="dock_commands">Commands</string>
+
+    <string name="keyboard_close">Close the keyboard</string>
+
+    <string name="quick_right_click">Right click</string>
+    <string name="quick_pc_audio">PC audio</string>
+    <string name="quick_touch">Touch</string>
+    <string name="quick_quality">Quality</string>
+    <string name="quick_game_mode">Game mode</string>
+    <string name="quick_back_to_touchpad">Back to the touchpad</string>
+    <string name="quick_back_to_pcs">Back to the PCs</string>
+    <string name="quick_disconnect">Disconnect</string>
+
     <string name="error_pc_refused">The PC is not answering on port %1$d. Check that Gesto is running on it.</string>
     <string name="error_pc_timeout">The PC took too long to answer.</string>
     <string name="error_pc_unreachable">This PC can\'t be reached from this network.</string>

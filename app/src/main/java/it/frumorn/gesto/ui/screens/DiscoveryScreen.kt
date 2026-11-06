@@ -13,7 +13,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -29,6 +28,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import it.frumorn.gesto.core.model.DiscoveredHost
 import it.frumorn.gesto.ui.GestoQrScannerOverlay
 import it.frumorn.gesto.ui.components.DiscoveredHostCard
+import it.frumorn.gesto.ui.components.GestoButton
+import it.frumorn.gesto.ui.components.GestoOutlinedButton
 import it.frumorn.gesto.ui.components.SectionHeader
 import it.frumorn.gesto.ui.components.GestoCard
 import it.frumorn.gesto.ui.state.DiscoveryActions
@@ -54,11 +55,12 @@ fun DiscoveryScreen(
                     "Host Discovery",
                     "UDP LAN discovery with manual IP and QR invite fallback.",
                 )
-                Button(onClick = actions.onScanLan, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Rounded.Refresh, contentDescription = null)
-                    Spacer(Modifier.width(GestoTheme.spacing.md))
-                    Text("Scan LAN")
-                }
+                GestoButton(
+                    text = "Scan LAN",
+                    onClick = actions.onScanLan,
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = Icons.Rounded.Refresh,
+                )
             }
             items(state.discoveredHosts) { host ->
                 DiscoveredHostCard(host = host, onClick = { actions.onSelectHost(host) })
@@ -72,14 +74,12 @@ fun DiscoveryScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(GestoTheme.spacing.lg))
-                    Button(
+                    GestoOutlinedButton(
+                        text = "Scan QR invite",
                         onClick = { scannerOpen = true },
                         modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(Icons.Rounded.QrCodeScanner, contentDescription = null)
-                        Spacer(Modifier.width(GestoTheme.spacing.md))
-                        Text("Scan QR invite")
-                    }
+                        icon = Icons.Rounded.QrCodeScanner,
+                    )
                     Spacer(Modifier.height(GestoTheme.spacing.lg))
                     OutlinedTextField(
                         value = inviteText,
@@ -90,13 +90,12 @@ fun DiscoveryScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(GestoTheme.spacing.md))
-                    Button(
+                    GestoOutlinedButton(
+                        text = "Use pasted invite",
                         onClick = { actions.onApplyInvite(inviteText) },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = INVITE_PREFIXES.any { inviteText.startsWith(it) },
-                    ) {
-                        Text("Use pasted invite")
-                    }
+                    )
                 }
             }
             item {
@@ -122,9 +121,7 @@ fun DiscoveryScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Spacer(Modifier.height(GestoTheme.spacing.xl))
-                    Button(onClick = actions.onUseManualHost, modifier = Modifier.fillMaxWidth()) {
-                        Text("Continue")
-                    }
+                    GestoButton("Continue", actions.onUseManualHost, Modifier.fillMaxWidth())
                 }
             }
         }

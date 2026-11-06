@@ -20,6 +20,6 @@ class ModelTest {
     fun initialUiStateIsDisconnected() {
         val state = GestoUiState()
         assertEquals(ConnectionState.Disconnected, state.connectionState)
-        assertEquals(Screen.Onboarding, state.screen)
+        assertEquals(Screen.Home, state.screen)
     }
 }

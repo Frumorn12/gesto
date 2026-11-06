@@ -1,12 +1,18 @@
 package it.frumorn.gesto.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -16,10 +22,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
+import it.frumorn.gesto.ui.theme.GestoMotion
 import it.frumorn.gesto.ui.theme.GestoPreviewSurface
 import it.frumorn.gesto.ui.theme.GestoTheme
 
@@ -95,6 +109,35 @@ fun AnimatedErrorBanner(message: String?, modifier: Modifier = Modifier) {
     }
 }
 
+private const val LOADING_MS = 1100
+private const val LOADING_BLOCK = 0.4f
+
+/** Thin indeterminate bar: a block that slides across a 3 dp track, for waits with no known end. */
+@Composable
+fun GestoLoadingBar(modifier: Modifier = Modifier) {
+    val progress by rememberInfiniteTransition(label = "loading").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(LOADING_MS, easing = GestoMotion.Enter)),
+        label = "loading-block",
+    )
+    val track = MaterialTheme.colorScheme.outlineVariant
+    val block = MaterialTheme.colorScheme.primary
+    Canvas(
+        modifier
+            .width(GestoTheme.spacing.loadingBarWidth)
+            .height(GestoTheme.spacing.loadingBarHeight)
+            .clipToBounds()
+            .semantics { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate },
+    ) {
+        drawRect(track)
+        val width = size.width * LOADING_BLOCK
+        // From just outside the left edge to just past the right one.
+        val x = -width + progress * (size.width + width)
+        drawRect(block, topLeft = Offset(x, 0f), size = Size(width, size.height))
+    }
+}
+
 /** `label ......... value` row used by the diagnostics screen. */
 @Composable
 fun DiagnosticRow(label: String, value: String, modifier: Modifier = Modifier) {
@@ -163,6 +206,7 @@ private fun IndicatorsPreviewBody() {
             CapabilityPill("Capture blocked", available = false)
         }
         StatusPill("Controller connected")
+        GestoLoadingBar()
         ErrorBanner("Screen stream dropped; retrying...")
         DiagnosticRow("Input backend", "wayland-portal")
         DiagnosticRow("Controller forwarding", capabilityLabel(false))

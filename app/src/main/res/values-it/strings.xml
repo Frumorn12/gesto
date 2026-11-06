@@ -4,6 +4,45 @@
 
     <string name="notice_reconnected">Connessione ripristinata</string>
 
+    <string name="notice_pc_not_answering">%1$s non risponde.</string>
+    <string name="action_retry">Riprova</string>
+    <string name="action_use_code">Usa un codice</string>
+    <string name="action_back">Indietro</string>
+    <string name="action_settings">Impostazioni</string>
+
+    <string name="nav_your_pcs">I tuoi PC</string>
+    <string name="home_subtitle">Scegli il PC che vuoi controllare.</string>
+    <string name="home_add_pc">Aggiungi un PC</string>
+    <string name="settings_diagnostics">Diagnostica</string>
+
+    <string name="launch_connecting_to">Mi collego a</string>
+    <string name="launch_choose_another">Scegli un altro PC</string>
+    <string name="launch_subtitle_lan">Stessa rete Wi-Fi · riapro %1$s</string>
+    <string name="launch_subtitle">Riapro %1$s</string>
+    <string name="launch_mode_touchpad">il Touchpad</string>
+    <string name="launch_mode_display">lo Schermo</string>
+    <string name="launch_mode_commands">i Comandi</string>
+
+    <string name="session_connected">Collegato</string>
+    <string name="session_reconnecting">Riconnessione…</string>
+    <string name="session_latency">%1$d ms</string>
+
+    <string name="dock_touchpad">Touchpad</string>
+    <string name="dock_screen">Schermo</string>
+    <string name="dock_keyboard">Tastiera</string>
+    <string name="dock_commands">Comandi</string>
+
+    <string name="keyboard_close">Chiudi la tastiera</string>
+
+    <string name="quick_right_click">Clic destro</string>
+    <string name="quick_pc_audio">Audio del PC</string>
+    <string name="quick_touch">Tocco</string>
+    <string name="quick_quality">Qualità</string>
+    <string name="quick_game_mode">Modalità gioco</string>
+    <string name="quick_back_to_touchpad">Torna al touchpad</string>
+    <string name="quick_back_to_pcs">Torna ai PC</string>
+    <string name="quick_disconnect">Scollega</string>
+
     <string name="error_pc_refused">Il PC non risponde sulla porta %1$d. Controlla che Gesto sia acceso.</string>
     <string name="error_pc_timeout">Il PC ci ha messo troppo a rispondere.</string>
     <string name="error_pc_unreachable">Da questa rete il PC non si raggiunge.</string>

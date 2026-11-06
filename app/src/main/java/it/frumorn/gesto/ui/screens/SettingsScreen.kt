@@ -7,18 +7,20 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import it.frumorn.gesto.R
 import it.frumorn.gesto.core.model.StreamProfile
 import it.frumorn.gesto.ui.components.ChoiceChipRow
 import it.frumorn.gesto.ui.components.ChoiceOption
+import it.frumorn.gesto.ui.components.GestoButton
+import it.frumorn.gesto.ui.components.GestoOutlinedButton
 import it.frumorn.gesto.ui.components.SectionHeader
 import it.frumorn.gesto.ui.components.SelectableTile
 import it.frumorn.gesto.ui.components.GestoCard
@@ -148,13 +150,23 @@ fun SettingsScreen(
             GestoCard {
                 Text("Connection", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(GestoTheme.spacing.lg))
-                Button(onClick = actions.onOpenTrustedHosts, modifier = Modifier.fillMaxWidth()) {
-                    Text("Trusted hosts")
-                }
+                GestoButton(
+                    text = stringResource(R.string.nav_your_pcs),
+                    onClick = actions.onOpenTrustedHosts,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Spacer(Modifier.height(GestoTheme.spacing.md))
-                OutlinedButton(onClick = actions.onDisconnect, modifier = Modifier.fillMaxWidth()) {
-                    Text("Disconnect")
-                }
+                GestoOutlinedButton(
+                    text = stringResource(R.string.settings_diagnostics),
+                    onClick = actions.onOpenDiagnostics,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(GestoTheme.spacing.md))
+                GestoOutlinedButton(
+                    text = stringResource(R.string.quick_disconnect),
+                    onClick = actions.onDisconnect,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }

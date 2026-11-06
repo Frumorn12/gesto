@@ -1,6 +1,12 @@
 package it.frumorn.gesto.ui.theme
 
+import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.spring
@@ -20,6 +26,13 @@ object GestoMotion {
     const val PULSE_MS = 1800
     const val WRITE_MS = 1300
     const val ENTER_OFFSET_DP = 10
+
+    /** A screen arrives rising [ENTER_OFFSET_DP] and fading in; the old one fades out quicker. */
+    fun screenChange(enterOffsetPx: Int): ContentTransform =
+        (
+            fadeIn(tween(ENTER_MS, easing = Enter)) +
+                slideInVertically(tween(ENTER_MS, easing = Enter)) { enterOffsetPx }
+            ) togetherWith fadeOut(tween(EXIT_MS, easing = Exit))
 
     fun <T> defaultSpatial(): FiniteAnimationSpec<T> = spring(dampingRatio = 0.8f, stiffness = 380f)
     fun <T> fastSpatial(): FiniteAnimationSpec<T> = spring(dampingRatio = 0.6f, stiffness = 800f)
