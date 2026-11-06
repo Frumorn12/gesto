@@ -641,7 +641,6 @@ class GestoViewModel(
         }
         runCatching { GestoInvite.parse(raw) }
             .onSuccess { invite ->
-                handledInvitePayload = raw
                 pendingInvite = invite
                 Log.i(
                     TAG,
@@ -652,6 +651,8 @@ class GestoViewModel(
                 abandonPairing()
                 pairingFromAddress = false
                 setAddPcStep(AddPcStep.Code)
+                // After the abandons above, which forget the last invite, so this one is not run twice.
+                handledInvitePayload = raw
                 _state.update {
                     it.copy(
                         selectedHost = invite.toDiscoveredHost(),
@@ -981,6 +982,8 @@ class GestoViewModel(
     private fun onApprovalFailed(attempt: Long, error: Throwable?, next: AddPcNext.Step) {
         if (livePairing != attempt) {
             Log.i(TAG, "approval_pairing_dropped stale=true reason=${error?.javaClass?.simpleName}")
+            // Abandoned: the channel a late launch left behind (if any) has nobody now.
+            releaseStrayChannel()
             return
         }
         livePairing = 0L
@@ -1001,7 +1004,11 @@ class GestoViewModel(
     }
 
     /** The QR step: the camera, reading the invite `gesto pair --qr` shows on the PC. */
-    fun openQr() = setAddPcStep(AddPcStep.Qr)
+    fun openQr() {
+        // A fresh camera reads any invite, even the one read last time.
+        handledInvitePayload = null
+        setAddPcStep(AddPcStep.Qr)
+    }
 
     fun openAddress() = setAddPcStep(AddPcStep.Address)
 
@@ -1064,7 +1071,12 @@ class GestoViewModel(
             ).onSuccess { (paired, capabilities) ->
                 onPaired(paired, capabilities, attempt)
             }.onFailure { error ->
-                if (error is CancellationException || livePairing != attempt) return@onFailure
+                if (error is CancellationException) return@onFailure
+                if (livePairing != attempt) {
+                    // Abandoned: the channel a late launch left behind (if any) has nobody now.
+                    releaseStrayChannel()
+                    return@onFailure
+                }
                 livePairing = 0L
                 Log.w(TAG, "code_pairing_failed", error)
                 // The same invite may be scanned again to retry.
@@ -1097,6 +1109,8 @@ class GestoViewModel(
         livePairing = 0L
         Log.i(TAG, "connection_state=connected paired_host=${paired.hostName} input_backend=${capabilities.inputBackend}")
         pendingInvite = null
+        // The same invite may be scanned again later (after the PC is forgotten, say).
+        handledInvitePayload = null
         val previous = _state.value.connectedHost
         if (previous != null && previous.fingerprint != paired.fingerprint) {
             // The session with the other PC lost its channel to this one.
@@ -1131,12 +1145,18 @@ class GestoViewModel(
     /**
      * Stops waiting for the pairing in flight, if any. Its connection is closed, so the daemon
      * withdraws the notification and stores nothing.
+     *
+     * The client's own channel is not touched here: the PC may have answered a moment ago, and then
+     * that channel is the new session's, which [onPaired] is about to open. A pairing that was really
+     * stopped fails on its own, and its failure path releases what nobody owns.
      */
     private fun abandonPairing() {
         if (livePairing == 0L) return
-        Log.i(TAG, "pairing_abandoned")
         livePairing = 0L
-        client.cancelPairing()
+        val stopped = client.cancelPairing()
+        Log.i(TAG, "pairing_abandoned stopped=$stopped")
+        // An invite left half-way may be scanned again.
+        handledInvitePayload = null
         _state.update {
             it.copy(
                 pairingBusy = false,
@@ -1144,7 +1164,6 @@ class GestoViewModel(
                 connectionState = if (it.connectionState == ConnectionState.Pairing) ConnectionState.Disconnected else it.connectionState,
             )
         }
-        releaseStrayChannel()
     }
 
     /**

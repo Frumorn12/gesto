@@ -32,18 +32,7 @@ class GestoClient {
     private val channelLock = Any()
     private var shutDown = false
     /** The pairing being waited for; guarded by [channelLock]. */
-    private var pairingAttempt: PairingAttempt? = null
-
-    /** One pairing in flight. Both fields are guarded by [channelLock]. */
-    private class PairingAttempt {
-        var channel: SecureChannel? = null
-        var cancelled = false
-
-        fun cancelLocked() {
-            cancelled = true
-            channel?.close()
-        }
-    }
+    private val pairingAttempts = PairingAttempts<SecureChannel>()
 
     /** Pairs with the 6-digit code `gesto pair` (or `waypad-daemon pair-code`) printed on the PC. */
     suspend fun pair(
@@ -80,12 +69,10 @@ class GestoClient {
     /**
      * Stops the pairing that is running, if any: its connection is closed (for an approval the PC then
      * withdraws its notification) and it fails with [PairingCancelledException]. A pairing that has
-     * already been answered is not undone.
+     * already been answered is not undone, and its channel, now the session's, stays open. Returns
+     * whether there was a pairing to stop.
      */
-    fun cancelPairing() = synchronized(channelLock) {
-        pairingAttempt?.cancelLocked()
-        pairingAttempt = null
-    }
+    fun cancelPairing(): Boolean = synchronized(channelLock) { pairingAttempts.cancel() }
 
     /**
      * One pairing exchange on its own connection. The wait happens outside [transportMutex], so a
@@ -104,11 +91,7 @@ class GestoClient {
         return withContext(Dispatchers.IO) {
             try {
                 val ch = SecureChannel.connect(address, port, expectedFingerprint)
-                val registered = synchronized(channelLock) {
-                    val live = !attempt.cancelled && !shutDown
-                    if (live) attempt.channel = ch
-                    live
-                }
+                val registered = synchronized(channelLock) { !shutDown && pairingAttempts.connected(attempt, ch) }
                 if (!registered) {
                     ch.close()
                     throw PairingCancelledException()
@@ -139,20 +122,19 @@ class GestoClient {
                             throw PairingCancelledException()
                         }
                         adopt(ch)
+                        // From here a late cancel must not close what is now the session's channel.
+                        pairingAttempts.adopted(attempt)
                     }
                 }
                 paired
             } finally {
-                synchronized(channelLock) { if (pairingAttempt === attempt) pairingAttempt = null }
+                synchronized(channelLock) { pairingAttempts.finished(attempt) }
             }
         }
     }
 
     /** Starts tracking a new pairing; one that was still running is cancelled. */
-    private fun beginPairing(): PairingAttempt = synchronized(channelLock) {
-        pairingAttempt?.cancelLocked()
-        PairingAttempt().also { pairingAttempt = it }
-    }
+    private fun beginPairing(): PairingAttempts.Attempt<SecureChannel> = synchronized(channelLock) { pairingAttempts.begin() }
 
     private fun pairedHost(data: JSONObject, address: String, port: Int): Pair<TrustedHost, CapabilitySummary> =
         TrustedHost(
@@ -329,8 +311,7 @@ class GestoClient {
     /** Closes the client for good (the ViewModel is going away). */
     fun shutdown() = synchronized(channelLock) {
         shutDown = true
-        pairingAttempt?.cancelLocked()
-        pairingAttempt = null
+        pairingAttempts.cancel()
         close()
     }
 
