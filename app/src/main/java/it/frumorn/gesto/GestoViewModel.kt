@@ -13,6 +13,7 @@ import it.frumorn.gesto.core.errors.ErrorTranslator
 import it.frumorn.gesto.core.input.PointerAcceleration
 import it.frumorn.gesto.core.input.PointerDelta
 import it.frumorn.gesto.core.input.SubPixelCarry
+import it.frumorn.gesto.core.input.liveEditOps
 import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.CapabilitySummary
 import it.frumorn.gesto.core.model.ConnectionState
@@ -1484,20 +1485,11 @@ class GestoViewModel(
     fun sendText(text: String) = launchCommand("Sending text...") { client.text(text) }
 
     fun sendLiveKeyboardEdit(previous: String, next: String) {
-        when {
-            next.startsWith(previous) -> {
-                val appended = next.removePrefix(previous)
-                if (appended.isNotEmpty()) launchQuiet { client.text(appended) }
-            }
-            previous.startsWith(next) -> {
-                val removed = (previous.length - next.length).coerceAtMost(32)
-                if (removed > 0) launchQuiet {
-                    repeat(removed) { client.shortcut("backspace") }
-                }
-            }
-            next != previous -> {
-                launchQuiet { client.text(next) }
-            }
+        val edit = liveEditOps(previous, next)
+        if (edit.isEmpty) return
+        launchQuiet {
+            repeat(edit.backspaces) { client.shortcut("backspace") }
+            if (edit.insert.isNotEmpty()) client.text(edit.insert)
         }
     }
 

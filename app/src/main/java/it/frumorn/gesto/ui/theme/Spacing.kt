@@ -46,6 +46,9 @@ data class GestoSpacing(
     /** Height of the Left and Right buttons (and the scroll strip) under the touchpad. */
     val clickButtonHeight: Dp = 58.dp
 
+    /** Height of a key and of the text field on the keyboard sheet. */
+    val keyHeight: Dp = 48.dp
+
     /** The narrow scroll strip between the touchpad's Left and Right buttons. */
     val scrollStripWidth: Dp = 54.dp
 

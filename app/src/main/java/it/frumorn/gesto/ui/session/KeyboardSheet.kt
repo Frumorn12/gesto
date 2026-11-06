@@ -32,7 +32,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import it.frumorn.gesto.R
 import it.frumorn.gesto.core.input.ModifierKey
 import it.frumorn.gesto.core.input.StickyModifiers
@@ -66,6 +65,8 @@ fun KeyboardSheet(actions: SheetActions, modifier: Modifier = Modifier) {
     fun sendKey(name: String) {
         actions.onKey(sticky.withModifiers(name))
         active = sticky.active
+        // Enter moves the PC to a new line; the live text starts again too.
+        if (name == "enter") text = ""
     }
 
     fun typed(next: String) {
@@ -75,6 +76,12 @@ fun KeyboardSheet(actions: SheetActions, modifier: Modifier = Modifier) {
             // With a modifier on, the character is a shortcut; it never reaches the live buffer.
             actions.onKey(keys)
             active = sticky.active
+            // A paste or swiped word: the first character was the shortcut, the rest is plain text.
+            val rest = appended.substring(Character.charCount(appended.codePointAt(0)))
+            if (rest.isNotEmpty()) {
+                actions.onKeyboardEdit(text, text + rest)
+                text += rest
+            }
         } else {
             actions.onKeyboardEdit(text, next)
             text = next
@@ -117,8 +124,6 @@ fun KeyboardSheet(actions: SheetActions, modifier: Modifier = Modifier) {
         )
     }
 }
-
-private val KeyHeight = 48.dp
 
 private val ModifierKeys = listOf(
     ModifierKey.Ctrl to R.string.key_ctrl,
@@ -171,7 +176,7 @@ private fun TypeBox(
         onValueChange = onValueChange,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = KeyHeight)
+            .heightIn(min = spacing.keyHeight)
             .border(spacing.borderWidth, colors.primary, MaterialTheme.shapes.extraSmall)
             .padding(horizontal = spacing.xl, vertical = spacing.lg),
         textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.onSurface),
