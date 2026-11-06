@@ -16,6 +16,12 @@ data class GestoInvite(
     val publicPairingAllowed: Boolean,
     val endpoints: List<GestoInviteEndpoint> = listOf(GestoInviteEndpoint(address, port, route)),
 ) {
+    /**
+     * Past its expiry ([expiresAt], unix seconds, as `gesto pair --qr` writes it) at [nowEpochSeconds]:
+     * the PC no longer takes its code. An invite without an expiry is not judged here.
+     */
+    fun isExpired(nowEpochSeconds: Long): Boolean = expiresAt > 0 && nowEpochSeconds > expiresAt
+
     fun toDiscoveredHost(): DiscoveredHost = DiscoveredHost(
         hostName = hostName.ifBlank { address },
         address = address,

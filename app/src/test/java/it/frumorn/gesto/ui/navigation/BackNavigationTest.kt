@@ -37,7 +37,7 @@ class BackNavigationTest {
     }
 
     @Test fun add_pc_inner_steps_go_back_to_search() {
-        for (step in listOf(AddPcStep.Approval, AddPcStep.Code, AddPcStep.Address, AddPcStep.Qr)) {
+        for (step in listOf(AddPcStep.Approval, AddPcStep.Code, AddPcStep.Address, AddPcStep.Qr, AddPcStep.Invite)) {
             assertEquals(
                 "step $step",
                 BackAction.AddPcStepTo(AddPcStep.Search),

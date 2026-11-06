@@ -50,6 +50,10 @@ data class AddPcActions(
     val onUseAddress: () -> Unit = {},
     /** The camera read an invite. */
     val onInviteScanned: (String) -> Unit = {},
+    /** "Pair" on an invite's confirmation. */
+    val onConfirmInvite: () -> Unit = {},
+    /** "Cancel" on an invite's confirmation: back to the search. */
+    val onCancelInvite: () -> Unit = {},
     /** The camera's close button: back to the search. */
     val onCloseQr: () -> Unit = {},
 )

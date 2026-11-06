@@ -84,7 +84,7 @@ private const val RADAR_START_SCALE = 0.2f
 private const val RADAR_START_ALPHA = 0.9f
 
 /** The page a step shows; the camera opens over the search. */
-private enum class AddPcPage { Search, Approval, Code, Address }
+private enum class AddPcPage { Search, Approval, Code, Address, Invite }
 
 private val AddPcStep.page: AddPcPage
     get() = when (this) {
@@ -92,12 +92,13 @@ private val AddPcStep.page: AddPcPage
         AddPcStep.Approval -> AddPcPage.Approval
         AddPcStep.Code -> AddPcPage.Code
         AddPcStep.Address -> AddPcPage.Address
+        AddPcStep.Invite -> AddPcPage.Invite
     }
 
 /** Title of the page bar for [step]. */
 fun addPcTitle(step: AddPcStep): Int = when (step.page) {
     AddPcPage.Approval, AddPcPage.Code -> R.string.add_confirm_title
-    AddPcPage.Search, AddPcPage.Address -> R.string.home_add_pc
+    AddPcPage.Search, AddPcPage.Address, AddPcPage.Invite -> R.string.home_add_pc
 }
 
 /**
@@ -123,6 +124,7 @@ fun AddPcScreen(
             AddPcPage.Approval -> ApprovalStep(state.pin, actions.onCancelApproval)
             AddPcPage.Code -> CodeStep(state, actions)
             AddPcPage.Address -> AddressStep(state, actions)
+            AddPcPage.Invite -> InviteStep(state, actions)
         }
     }
 }
@@ -413,6 +415,54 @@ private fun CodeStep(state: AddPcUiState, actions: AddPcActions) {
     LaunchedEffect(Unit) { if (state.code.isEmpty()) focus.requestFocus() }
 }
 
+/**
+ * An invite (a QR, a link) names a PC and where it is: nothing is paired until the user, who sees
+ * both, presses Pair. A link can come from anywhere.
+ */
+@Composable
+private fun InviteStep(state: AddPcUiState, actions: AddPcActions) {
+    val spacing = GestoTheme.spacing
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        StepBars(current = 2)
+        Spacer(Modifier.height(spacing.section))
+        Text(
+            stringResource(R.string.add_invite_question, state.inviteName, state.inviteAddress),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(spacing.md))
+        Text(
+            stringResource(R.string.add_invite_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(spacing.section))
+        GestoButton(
+            text = stringResource(R.string.action_pair),
+            onClick = actions.onConfirmInvite,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !state.busy,
+        )
+        Spacer(Modifier.height(spacing.md))
+        GestoTextButton(
+            text = stringResource(R.string.action_cancel),
+            onClick = actions.onCancelInvite,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (state.busy) {
+            Spacer(Modifier.height(spacing.xl))
+            GestoLoadingBar()
+        }
+        Spacer(Modifier.height(spacing.gutter))
+    }
+}
+
 @Composable
 private fun AddressStep(state: AddPcUiState, actions: AddPcActions) {
     val spacing = GestoTheme.spacing
@@ -511,6 +561,13 @@ private fun AddPcApprovalPreview() =
 @Preview(name = "Add a PC - code - light", widthDp = 412, heightDp = 860)
 @Composable
 private fun AddPcCodePreview() = AddPcPreview(ThemeMode.Light, AddPcUiState(step = AddPcStep.Code, code = "1234"))
+
+@Preview(name = "Add a PC - invite - light", widthDp = 412, heightDp = 860)
+@Composable
+private fun AddPcInvitePreview() = AddPcPreview(
+    ThemeMode.Light,
+    AddPcUiState(step = AddPcStep.Invite, inviteName = "Legion", inviteAddress = "192.168.0.22"),
+)
 
 @Preview(name = "Add a PC - address - dark", widthDp = 412, heightDp = 860)
 @Composable

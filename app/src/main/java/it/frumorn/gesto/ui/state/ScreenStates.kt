@@ -89,6 +89,9 @@ data class AddPcUiState(
     val busy: Boolean = false,
     val address: String = "",
     val port: String = "47771",
+    /** The PC an invite names, and where it says the PC is, for the confirmation before pairing. */
+    val inviteName: String = "",
+    val inviteAddress: String = "",
 )
 
 /** Whether the PC takes the touchpad's input, as far as the app knows. */

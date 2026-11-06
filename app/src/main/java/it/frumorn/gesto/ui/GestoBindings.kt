@@ -109,6 +109,8 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
             onPortChange = viewModel::setManualPort,
             onUseAddress = viewModel::useAddress,
             onInviteScanned = viewModel::applyInvite,
+            onConfirmInvite = viewModel::confirmInvite,
+            onCancelInvite = viewModel::cancelInvite,
             onCloseQr = { viewModel.setAddPcStep(AddPcStep.Search) },
         ),
         touchpad = TouchpadActions(
@@ -229,7 +231,17 @@ internal fun GestoUiState.toAddPcState(): AddPcUiState = AddPcUiState(
     busy = pairingBusy,
     address = manualAddress,
     port = manualPort,
+    inviteName = if (addPcStep == AddPcStep.Invite) selectedHost?.hostName.orEmpty() else "",
+    inviteAddress = if (addPcStep == AddPcStep.Invite) selectedHost?.let { inviteWhere(it.address, it.port) }.orEmpty() else "",
 )
+
+/** Where an invite says the PC is: its address, with the port when it is not the usual one. */
+internal fun inviteWhere(address: String, port: Int): String {
+    val host = if (':' in address && !address.startsWith("[")) "[$address]" else address
+    return if (port == DEFAULT_CONTROL_PORT) address else "$host:$port"
+}
+
+private const val DEFAULT_CONTROL_PORT = 47771
 
 internal fun GestoUiState.toTouchpadState(): TouchpadUiState = TouchpadUiState(
     input = touchpadInput(

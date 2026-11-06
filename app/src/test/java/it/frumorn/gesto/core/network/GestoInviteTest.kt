@@ -1,6 +1,8 @@
 package it.frumorn.gesto.core.network
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -54,5 +56,20 @@ class GestoInviteTest {
     @Test
     fun rejects_other_scheme() {
         assertThrows(IllegalArgumentException::class.java) { GestoInvite.parse("http://$sampleQuery") }
+    }
+
+    @Test
+    fun anInvitePastItsExpiryIsExpired() {
+        val invite = GestoInvite.parse("gesto://invite?host=pc&address=192.168.0.22&code=123456&expires=1770000000")
+        assertFalse(invite.isExpired(1_769_999_999L))
+        // The PC still takes the code in the second it expires.
+        assertFalse(invite.isExpired(1_770_000_000L))
+        assertTrue(invite.isExpired(1_770_000_001L))
+    }
+
+    @Test
+    fun anInviteWithoutExpiryIsNotJudgedExpired() {
+        val invite = GestoInvite.parse("gesto://invite?host=pc&address=192.168.0.22&code=123456")
+        assertFalse(invite.isExpired(Long.MAX_VALUE))
     }
 }

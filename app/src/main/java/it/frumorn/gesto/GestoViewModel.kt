@@ -106,8 +106,11 @@ enum class SessionMode(val screen: Screen) {
     Commands(Screen.Commands),
 }
 
-/** Steps of "Add a PC": search the network, then approve a PIN, type a code, an address or scan a QR. */
-enum class AddPcStep { Search, Approval, Code, Address, Qr }
+/**
+ * Steps of "Add a PC": search the network, then approve a PIN, type a code, an address or scan a
+ * QR. An invite (a scanned QR, a `gesto://invite` link) is confirmed before anything is paired.
+ */
+enum class AddPcStep { Search, Approval, Code, Address, Qr, Invite }
 
 /** The session mode this screen shows, null outside a session. */
 val Screen.sessionMode: SessionMode?
@@ -815,7 +818,13 @@ class GestoViewModel(
      * pairing: its connection closes, so the PC withdraws its notification.
      */
     fun setAddPcStep(step: AddPcStep) {
-        if (step != _state.value.addPcStep) abandonPairing()
+        val from = _state.value.addPcStep
+        if (step != from) abandonPairing()
+        if (from == AddPcStep.Invite && step != AddPcStep.Invite) {
+            // An invite turned down (or left) is dropped; the same one may be opened again.
+            pendingInvite = null
+            handledInvitePayload = null
+        }
         _state.update { it.copy(addPcStep = step, error = null) }
     }
 
@@ -826,7 +835,6 @@ class GestoViewModel(
         }
         runCatching { GestoInvite.parse(raw) }
             .onSuccess { invite ->
-                pendingInvite = invite
                 Log.i(
                     TAG,
                     "qr_invite_loaded host=${invite.hostName} endpoints=${invite.endpoints.joinToString { "${it.route}:${it.address}:${it.port}" }} route=${invite.route} policy=${invite.policy} publicPairingAllowed=${invite.publicPairingAllowed} expires=${invite.expiresAt}",
@@ -835,8 +843,17 @@ class GestoViewModel(
                 // An invite replaces whatever pairing was running, even on the code step itself.
                 abandonPairing()
                 pairingFromAddress = false
-                setAddPcStep(AddPcStep.Code)
-                // After the abandons above, which forget the last invite, so this one is not run twice.
+                if (invite.isExpired(System.currentTimeMillis() / 1000)) {
+                    Log.w(TAG, "qr_invite_expired expires=${invite.expiresAt}")
+                    setAddPcStep(AddPcStep.Search)
+                    emitNotice(Notice(UiText.Res(R.string.error_invite_expired)))
+                    return@onSuccess
+                }
+                // A link can come from any web page or chat: nothing is paired until the user,
+                // seeing which PC and where, says so.
+                setAddPcStep(AddPcStep.Invite)
+                // After the step change above, which forgets the last invite, so this one is not run twice.
+                pendingInvite = invite
                 handledInvitePayload = raw
                 _state.update {
                     it.copy(
@@ -848,7 +865,6 @@ class GestoViewModel(
                         error = null,
                     )
                 }
-                pairWithCode()
             }
             .onFailure { throwable ->
                 Log.w(TAG, "qr_invite_failed message=${throwable.message}", throwable)
@@ -857,6 +873,16 @@ class GestoViewModel(
                 emitNotice(Notice(UiText.Res(R.string.error_invite_invalid)))
             }
     }
+
+    /** "Pair" on the invite's confirmation: the pairing with the code it carries. */
+    fun confirmInvite() {
+        if (_state.value.addPcStep != AddPcStep.Invite || pendingInvite == null) return
+        Log.i(TAG, "qr_invite_confirmed")
+        pairWithCode()
+    }
+
+    /** "Cancel" on the invite's confirmation: back to the search, nothing paired. */
+    fun cancelInvite() = setAddPcStep(AddPcStep.Search)
 
     fun updateExternalInputDevices(devices: List<ExternalInputDeviceSummary>) {
         val previous = _state.value.externalInputDevices.associateBy { it.id }
@@ -1286,6 +1312,8 @@ class GestoViewModel(
                 Log.w(TAG, "code_pairing_failed", error)
                 // The same invite may be scanned again to retry.
                 handledInvitePayload = null
+                // A failed invite has no code left to confirm: back to the search, with the notice.
+                if (_state.value.addPcStep == AddPcStep.Invite) setAddPcStep(AddPcStep.Search)
                 _state.update {
                     it.copy(
                         pairingBusy = false,

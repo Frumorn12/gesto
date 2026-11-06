@@ -32,7 +32,7 @@ fun backAction(
         Screen.Touchpad, Screen.Display, Screen.Commands -> BackAction.OpenQuickMenu
         Screen.AddPc -> when (addPcStep) {
             AddPcStep.Search -> BackAction.GoTo(Screen.Home)
-            AddPcStep.Approval, AddPcStep.Code, AddPcStep.Address, AddPcStep.Qr ->
+            AddPcStep.Approval, AddPcStep.Code, AddPcStep.Address, AddPcStep.Qr, AddPcStep.Invite ->
                 BackAction.AddPcStepTo(AddPcStep.Search)
         }
         Screen.Settings -> BackAction.GoTo(previousScreen ?: Screen.Home)

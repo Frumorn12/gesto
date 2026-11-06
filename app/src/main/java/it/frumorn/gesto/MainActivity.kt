@@ -91,7 +91,10 @@ class MainActivity : ComponentActivity() {
         return handled
     }
 
-    /** `gesto://invite` (and the old `waypad://invite`) pairs; `gesto://connect?host=` opens a PC. */
+    /**
+     * `gesto://invite` (and the old `waypad://invite`) opens the invite's confirmation in Add a PC;
+     * `gesto://connect?host=` opens a PC.
+     */
     private fun handleLinkIntent(intent: Intent?) {
         val data = intent?.dataString ?: return
         when {
