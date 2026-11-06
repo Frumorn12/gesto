@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<!-- Render: chromium --headless=new --disable-gpu --hide-scrollbars --allow-file-access-from-files
+     --window-size=2000,1000 --screenshot=../banner.png file://$PWD/banner.html -->
+<html><head><meta charset="utf-8"><style>
+@font-face{font-family:M;src:url(../../../app/src/main/res/font/manrope_regular.ttf);font-weight:400}
+@font-face{font-family:M;src:url(../../../app/src/main/res/font/manrope_medium.ttf);font-weight:500}
+@font-face{font-family:M;src:url(../../../app/src/main/res/font/manrope_semibold.ttf);font-weight:600}
+html,body{margin:0;width:2000px;height:1000px;overflow:hidden;background:#1F1747;font-family:M}
+.wrap{position:relative;width:2000px;height:1000px}
+.blocks{position:absolute;left:0;top:0;width:2000px;height:1000px}
+.left{position:absolute;left:150px;top:250px;width:900px}
+.icon{width:200px;height:200px}
+h1{font-weight:600;font-size:200px;letter-spacing:-0.035em;color:#fff;margin:24px 0 0;line-height:1}
+p{font-weight:400;font-size:52px;color:#C9C2EC;margin:26px 0 0;letter-spacing:-0.01em}
+p.sub{font-size:34px;color:#A491FA;margin-top:22px;font-weight:500}
+.phone{position:absolute;top:70px;width:410px;height:908px;border-radius:52px;background:#0d0a1d;padding:12px;box-shadow:0 40px 80px -30px rgba(0,0,0,.6)}
+.phone img{width:100%;height:100%;border-radius:42px;object-fit:cover;display:block}
+</style></head><body><div class="wrap">
+<svg class="blocks" viewBox="0 0 2000 1000">
+<rect x="1080" y="40" width="70" height="70" fill="#6546F3"/><rect x="1160" y="40" width="34" height="34" fill="#A491FA" opacity=".8"/>
+<rect x="1080" y="880" width="130" height="80" fill="#493990"/><rect x="1220" y="880" width="80" height="80" fill="#271E52"/>
+<rect x="60" y="60" width="44" height="44" fill="#493990"/><rect x="114" y="60" width="22" height="22" fill="#6546F3"/>
+<rect x="60" y="900" width="60" height="60" fill="#271E52"/>
+</svg>
+<div class="left">
+<svg class="icon" viewBox="0 0 108 108"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7A5CF6"/><stop offset="1" stop-color="#4E31D6"/></linearGradient></defs><rect width="108" height="108" rx="26" fill="url(#g)"/><path d="M59,37 C53,30 40,31 37,42 C34,52 42,57 49,53 C55,49 58,41 59,33 C59,46 58,62 55,72 C52,82 41,84 39,78 C37,72 51,66 74,56" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<h1>Gesto</h1>
+<p>Your Linux desktop, in your hand.</p>
+<p class="sub">Touchpad, keyboard, screen and media for Wayland</p>
+</div>
+<div class="phone" style="left:1100px"><img src="../../screenshots/dark-home.png"></div>
+<div class="phone" style="left:1540px;top:20px"><img src="../../screenshots/dark-touchpad.png"></div>
+</div></body></html>

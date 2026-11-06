@@ -1,89 +1,54 @@
 # Architecture
 
-Waypad Android is a single-module Kotlin/Compose app. It is intentionally small enough for MVP delivery while preserving clean boundaries around UI, storage, and networking.
+Gesto is a single-module Kotlin and Jetpack Compose app. It was called Waypad until 0.1; some storage names and wire identifiers still say `waypad` so that existing data and older PCs keep working.
 
 ## Layers
 
 | Package | Responsibility |
 | --- | --- |
-| `core.model` | Shared UI and protocol-facing model types. |
-| `core.externalinput` | Android `InputDevice`, `KeyEvent`, and `MotionEvent` classification and normalization. |
-| `core.network` | UDP discovery, handshake crypto, encrypted frames, command client, and screen frame stream client. |
-| `core.screen` | Aspect-ratio-aware coordinate mapping from phone surface to host source coordinates. |
-| `core.storage` | Android Keystore protected trusted-host storage. |
-| `ui` | Compose theme and screens. |
-| root package | Activity and ViewModel orchestration. |
+| `core.network` | Discovery, handshake crypto, the encrypted channel, the command client (`GestoClient`), invites, wake-on-LAN and the screen stream client. |
+| `core.pairing` | The Add a PC flow and the 4-digit PIN. |
+| `core.session` | Which PC to reopen at launch, presence on the network, reconnect policy. |
+| `core.input` | Touchpad and direct-touch gesture state machines, pointer acceleration, sticky modifiers, live text edits. |
+| `core.externalinput` | Android `InputDevice`, `KeyEvent` and `MotionEvent` classification and normalisation for keyboards, mice and controllers attached to the phone. |
+| `core.video` | H.264 hardware decoding onto a `Surface`, the legacy JPEG renderer, frame dropping, zoom, Automatic quality. |
+| `core.audio` | Opus decoding and low-latency playback of the desktop's sound. |
+| `core.screen` | Mapping phone touches to the PC's screen coordinates. |
+| `core.storage` | Trusted hosts encrypted with the Android Keystore; settings in DataStore. |
+| `core.errors` | Exceptions turned into plain-language messages. |
+| `ui` | Compose theme, components, screens, the session scaffold (dock, quick menu, keyboard sheet). |
+| root package | `MainActivity` and `GestoViewModel`. |
 
 ## Screens
 
-- Onboarding.
-- Discovery and manual IP entry.
-- Pairing code and fingerprint confirmation.
-- Touchpad remote.
-- Remote screen viewer and controller.
-- Keyboard and shortcut controls.
-- Media/system controls.
-- Settings.
-- Trusted hosts.
-- Troubleshooting diagnostics.
+`GestoViewModel` owns the current screen in its state; there is no `NavHost`. The back button is a pure function of the same state.
+
+- **Launch**: reconnecting to the last PC, with a way to pick another.
+- **Home** ("Your PCs"): paired PCs, presence, wake, rename, forget.
+- **Add a PC**: network search, PIN approval, code, address, QR scan, invite confirmation.
+- **Session**, with a dock at the bottom: **Touchpad**, **Screen**, the **Keyboard** sheet and **Commands**. The app reopens on the last mode used.
+- **Settings**, **Advanced** and **Diagnostics**.
 
 ## Networking
 
-The app uses a long-lived TCP socket for low latency interactive control. It does not use HTTP polling. UDP discovery is optional; manual IP entry works when broadcast is blocked.
+The app keeps one long-lived TCP connection to the PC for control: no HTTP, no polling. Discovery uses UDP broadcast and is only a hint; an address typed by hand or carried by a QR invite works when broadcast is blocked.
 
-Remote screen mode negotiates a stream over the encrypted control channel, then opens a second short-token-protected TCP frame stream back to the daemon's stable control port. The stream socket starts with a single `stream_connect` JSON line and then switches to `WAYPAD_STREAM_V1` JPEG frames. Using the existing control port avoids the random high-port failures that show up on phones as `connection closed`, `broken pipe`, or connect timeouts when a LAN firewall blocks dynamic stream ports. The Android UI decodes frames into a Compose `Image` and keeps input delivery on the existing coalesced command queue.
+The handshake is a P-256 key exchange signed by the PC's host key, followed by HKDF and AES-GCM frames. The host key is pinned at pairing.
 
-Stream profile settings are protocol inputs, not UI-only labels. Balanced,
-Quality, Ultra Low Latency, and Game Mode choose real `max_fps`,
-`jpeg_quality`, and max-dimension values for `start_screen_stream`. The app also
-tracks lightweight estimated FPS and average frame size for diagnostics.
+Pairing has two paths. With **approval**, the phone shows a 4-digit PIN and the PC shows a desktop notification with the same PIN; the pairing completes when someone presses Allow on the PC. With a **code**, the user types the one-time code from `gesto pair`, or scans its QR invite (`gesto://invite`, the old `waypad://invite` still works). An invite can carry a LAN and a public address; the app tries them in order, and each one still goes through the signed handshake and pinning.
 
-External Android input devices are normalized before they reach networking code. `InputDevice` source flags classify keyboard, mouse, touchpad, gamepad, and joystick devices. `KeyEvent` values are mapped to XKB keysyms for the host. Mouse movement, buttons, and wheel events become `external_input` protocol events and are coalesced through the same backpressure-aware input queue as touch gestures. Controller buttons and axes are normalized with deadzones, and the app forwards them only when the host reports controller support. The realtime queue has a high-watermark drop policy for stale high-frequency events, and controller axis bursts are collapsed to the latest value per axis before transport so delayed analog state is not dumped into the host later. Current Linux hosts expose controller support through a daemon-side `uinput` virtual gamepad, not through Wayland pointer/keyboard portals.
+The **screen** is negotiated over the control channel, then a second TCP socket to the same control port carries the stream, after a one-line token request. Frames are length-prefixed envelopes: `WAYPAD_STREAM_V2` carries H.264, decoded by `MediaCodec` straight onto a `Surface`; `WAYPAD_STREAM_V1` carries JPEG for older PCs and fallback sources. The desktop's **sound** rides the same socket as Opus packets, played through `AudioTrack` in low-latency mode. Late frames and late audio are dropped rather than queued, because freshness matters more than completeness. The stream is protected by its token but is not encrypted like the control channel.
 
-QR invites use `waypad://invite` deep links generated by `waypad-daemon invite`.
-They carry host name, endpoint hints, port, fingerprint, one-time code, expiry,
-and route type. Android accepts the invite from an intent, pasted payload, or
-the in-app CameraX/ML Kit QR scanner. If both `remote_address` and
-`lan_address` are present, the app treats them as ordered connection candidates
-and falls back between them before reporting failure. Every candidate still uses
-the normal signed handshake and host-key pinning.
+**Automatic quality** judges the frame rate actually shown in short windows and steps down one rung after several bad windows in a row. Smooth, Sharp and Saver are fixed presets; Advanced sets fps, size and encoder quality by hand (Custom).
 
-The current MVP does not bundle WebRTC. That avoids adding a partial signaling/media stack before the daemon has stable source selection and portal capability negotiation. The stream protocol is intentionally isolated so WebRTC/H.264 can replace it later. Outside-LAN operation today is explicit direct TCP through a public endpoint, VPN, or port forward advertised in the QR invite; automatic ICE/STUN/TURN traversal is reported as unsupported by host capabilities.
+**External devices** attached to the phone are normalised before they reach the network code: keys become XKB keysyms, mouse movement and wheel become pointer events, controller buttons and axes are normalised with deadzones. They go through the same backpressure-aware input queue as touch, and controller axis bursts collapse to the latest value. On the PC, the controller is a `uinput` virtual gamepad.
 
 ## Storage
 
-Trusted hosts are serialized as JSON and encrypted before entering `SharedPreferences`. The AES key is generated inside `AndroidKeyStore` with GCM mode and randomized IVs.
+Trusted hosts, tokens included, are serialised as JSON and encrypted with an AES-GCM key generated inside the Android Keystore before they reach `SharedPreferences` (`waypad_secure`, excluded from backups). Settings live in Preferences DataStore (`waypad_settings`) and are observed as `Flow`s.
 
-Stream settings, haptics, and game mode are persisted via **Preferences DataStore** (`androidx.datastore:datastore-preferences`). DataStore provides asynchronous, type-safe storage with automatic migration from legacy defaults. Settings are loaded on `ViewModel` init and observed as `Flow`s, eliminating startup race conditions between UI state and persisted values. The first-run default is `Game` profile (60 fps, 1280px, quality 52) to prioritize controller playability.
+## Wayland reality
 
-## UI Structure
+The app does not pretend input is always available. It shows what the PC reports: if the PC has not approved control from the phone yet, the touchpad says so and offers to ask the PC; if the PC cannot share its screen, the Screen says so. Diagnostics shows the details, and `gesto doctor` on the PC explains them.
 
-The app follows a single-activity Compose architecture with these screens:
-
-- **Onboarding** — first-launch discovery prompt
-- **Discovery** — UDP LAN scan, manual IP, QR invite paste/scan
-- **Pairing** — 6-digit code entry with fingerprint display
-- **Pad** — touchpad remote with gesture recognition and external device status
-- **Screen** — remote display with stream setup card, source selector, fullscreen, and Game Mode
-- **Keyboard** — live text input and Wayland-safe shortcuts
-- **Controls** — media, volume, brightness, system actions
-- **Settings** — grouped cards for Stream Performance, Input Feel, and Connection
-- **Trusted Hosts** — encrypted host identity management
-- **Troubleshooting** — live diagnostics including stream FPS, backend, and capability status
-
-The Settings screen uses grouped cards with chips instead of dense button rows. The Screen tab shows a prominent "Stream Setup" card that makes the backend, source, and start/stop actions obvious. Game Mode is a first-class toggle with clear controller-forwarding instructions.
-
-## Wayland Reality
-
-The Android app does not pretend input is always available. It displays the daemon capability model and exposes "Approve portal" so the Linux user can grant RemoteDesktop portal permission locally. If Hyprland or the portal stack cannot provide RemoteDesktop, the app remains connected but input commands show the daemon's unsupported reason.
-
-Remote screen taps are mapped through `ScreenViewport`, which accounts for contain-fit scaling and letterboxing. Touches in black bars are ignored instead of being sent to the wrong desktop coordinate.
-
-Remote screen mode temporarily switches the activity orientation policy to sensor-driven rotation so landscape desktop sharing is usable from the phone. Other app screens return to portrait. Fullscreen is UI state only: entering or exiting fullscreen hides/shows system bars and rearranges controls, but it does not intentionally stop the active stream session. Stream reconnect and manual stop remain explicit ViewModel operations.
-
-Game Mode is a stricter fullscreen state. It enables the low-latency stream
-profile by default, hides the top control bar after a short timeout, reduces
-overlay redraws, and routes external keyboard/mouse/controller events to the
-remote session. Controls can be revealed by touching the top handle or by a
-reserved controller shortcut: Mode, or Start+Select. Those reserved inputs are
-consumed locally and are not forwarded as random host button presses.
+Touches on the screen are mapped through the contain-fit layout, so touches on the black bars are ignored instead of landing on the wrong spot of the desktop. The Screen follows the phone's rotation; in landscape it goes full screen and only the purple quick-menu button stays. Game mode sets the Smooth quality, full screen and controller forwarding together, and turning it off restores the previous quality.

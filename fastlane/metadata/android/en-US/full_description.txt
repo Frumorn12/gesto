@@ -1,0 +1,30 @@
+<p><b>Gesto</b> ("gesture" in Italian) turns your phone into a touchpad, keyboard, remote screen and media remote for your Linux desktop. It talks to Gesto for Linux, a small service that runs on the PC, and is made for Wayland and Hyprland.</p>
+
+<p><b>Your PCs</b></p>
+<ul>
+<li>Opens on the last PC and mode you used</li>
+<li>Shows which PCs are online, wakes the sleeping ones (wake-on-LAN)</li>
+<li>Add a PC with a 4-digit PIN you confirm on the PC, or with a code, a QR or its address</li>
+</ul>
+
+<p><b>Touchpad and keyboard</b></p>
+<ul>
+<li>One finger moves, tap to click, two-finger tap to right-click, two fingers scroll, hold then move to drag</li>
+<li>Ctrl, Alt, Super and Shift that stay pressed, Esc, Tab, arrows, live typing</li>
+</ul>
+
+<p><b>Screen</b></p>
+<ul>
+<li>The PC's screen as a hardware H.264 stream up to 60 fps, with the desktop's sound</li>
+<li>Touchpad or direct touch, pinch to zoom, full screen in landscape</li>
+<li>Game mode: a controller attached to the phone plays as a gamepad on the PC</li>
+</ul>
+
+<p><b>Commands</b></p>
+<ul>
+<li>Media, volume, brightness, shortcuts, apps on the PC, lock and suspend</li>
+</ul>
+
+<p>Light and dark theme, in English and Italian. The control channel is encrypted and the PC's identity is pinned; pairing has to be approved on the PC. No accounts, no ads, no analytics.</p>
+
+<p>Requires Gesto for Linux on the PC: https://github.com/Frumorn12/gesto-linux</p>

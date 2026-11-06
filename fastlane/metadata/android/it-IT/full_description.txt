@@ -1,0 +1,30 @@
+<p><b>Gesto</b> trasforma il telefono in touchpad, tastiera, schermo remoto e telecomando per il tuo PC Linux. Parla con Gesto for Linux, un piccolo servizio che gira sul PC, ed è fatto per Wayland e Hyprland.</p>
+
+<p><b>I tuoi PC</b></p>
+<ul>
+<li>Riparte dall'ultimo PC e dall'ultima modalità usata</li>
+<li>Mostra quali PC sono accesi e sveglia quelli spenti (wake-on-LAN)</li>
+<li>Aggiungi un PC con un PIN di 4 cifre da confermare sul PC, oppure con un codice, un QR o il suo indirizzo</li>
+</ul>
+
+<p><b>Touchpad e tastiera</b></p>
+<ul>
+<li>Un dito muove, un tocco fa clic, un tocco con due dita è il clic destro, due dita scorrono, tieni premuto e muovi per trascinare</li>
+<li>Ctrl, Alt, Super e Maiusc che restano premuti, Esc, Tab, frecce, scrittura in diretta</li>
+</ul>
+
+<p><b>Schermo</b></p>
+<ul>
+<li>Lo schermo del PC in H.264 hardware fino a 60 fps, con l'audio del desktop</li>
+<li>Tocco come touchpad o diretto, pizzica per ingrandire, tutto schermo in orizzontale</li>
+<li>Modalità gioco: un controller collegato al telefono diventa un gamepad sul PC</li>
+</ul>
+
+<p><b>Comandi</b></p>
+<ul>
+<li>Musica, volume, luminosità, scorciatoie, app del PC, blocco e sospensione</li>
+</ul>
+
+<p>Tema chiaro e scuro, in italiano e inglese. Il canale di controllo è cifrato e l'identità del PC viene fissata; l'accoppiamento va approvato sul PC. Niente account, niente pubblicità, niente statistiche.</p>
+
+<p>Serve Gesto for Linux sul PC: https://github.com/Frumorn12/gesto-linux</p>
