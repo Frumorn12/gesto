@@ -91,38 +91,21 @@ data class ScreenStreamInfo(
     val actualQuality: Int = 0,
 )
 
-enum class StreamProfile(
-    val label: String,
-    val defaultFps: Int,
-    val defaultQuality: Int,
-    val defaultMaxDimension: Int,
-) {
-    Balanced("Balanced", 30, 70, 1600),
-    Quality("Quality", 30, 86, 2400),
-    LowLatency("Ultra low latency", 60, 58, 1280),
-    Game("Game Mode", 60, 52, 1280);
-
-    fun toStreamSettings(showStats: Boolean): StreamSettings =
-        StreamSettings(
-            profile = this,
-            maxFps = defaultFps,
-            jpegQuality = defaultQuality,
-            maxDimension = defaultMaxDimension,
-            showStats = showStats,
-        )
-}
-
 /**
  * How a finger on the remote screen drives the PC: like the touchpad (it moves the pointer from
  * where it is) or directly (a tap clicks where it touches).
  */
 enum class TouchMode { Touchpad, Direct }
 
+/**
+ * What the screen is streamed with: the [preset] chosen and its values (for Auto, those of its first
+ * rung; see [atRung]), and whether the small fps line shows over the video. The defaults are Auto's.
+ */
 data class StreamSettings(
-    val profile: StreamProfile = StreamProfile.Balanced,
-    val maxFps: Int = StreamProfile.Balanced.defaultFps,
-    val jpegQuality: Int = StreamProfile.Balanced.defaultQuality,
-    val maxDimension: Int = StreamProfile.Balanced.defaultMaxDimension,
+    val preset: QualityPreset = QualityPreset.Auto,
+    val maxFps: Int = 60,
+    val jpegQuality: Int = 70,
+    val maxDimension: Int = 1920,
     val showStats: Boolean = true,
 ) {
     val maxWidth: Int

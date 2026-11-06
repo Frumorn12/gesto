@@ -6,8 +6,10 @@ import it.frumorn.gesto.core.input.PointerDelta
 import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.PointerButton
 import it.frumorn.gesto.core.model.RemoteApp
-import it.frumorn.gesto.core.model.StreamProfile
+import it.frumorn.gesto.core.model.QualityPreset
+import it.frumorn.gesto.core.model.TouchMode
 import it.frumorn.gesto.ui.navigation.QuickMenuEntry
+import it.frumorn.gesto.ui.theme.ThemeMode
 
 /**
  * Callback bundles handed down to the screens.
@@ -119,16 +121,31 @@ data class ControlsActions(
 
 @Immutable
 data class SettingsActions(
-    val onSelectProfile: (StreamProfile) -> Unit = {},
-    val onSetMaxFps: (Int) -> Unit = {},
-    val onSetMaxDimension: (Int) -> Unit = {},
-    val onSetJpegQuality: (Int) -> Unit = {},
+    val onSelectQuality: (QualityPreset) -> Unit = {},
+    val onSetTouchMode: (TouchMode) -> Unit = {},
     val onToggleStats: () -> Unit = {},
+    /** Called once the finger leaves the slider. */
+    val onSetPointerSpeed: (Float) -> Unit = {},
+    val onSetPointerAcceleration: (Boolean) -> Unit = {},
+    val onSetTwoFingerRightClick: (Boolean) -> Unit = {},
     val onToggleHaptics: () -> Unit = {},
-    val onSetGameMode: (Boolean) -> Unit = {},
-    val onOpenTrustedHosts: () -> Unit = {},
+    val onSetThemeMode: (ThemeMode) -> Unit = {},
+    val onSetRoundedCorners: (Boolean) -> Unit = {},
+    val onOpenPcs: () -> Unit = {},
     val onOpenDiagnostics: () -> Unit = {},
-    val onDisconnect: () -> Unit = {},
+    val onOpenAdvanced: () -> Unit = {},
+)
+
+/** Advanced: each value set here makes the quality Custom. */
+@Immutable
+data class AdvancedActions(
+    val onSetFps: (Int) -> Unit = {},
+    val onSetMaxDimension: (Int) -> Unit = {},
+    /** Called once the finger leaves the slider. */
+    val onSetQuality: (Int) -> Unit = {},
+    /** A screen of the PC by id; null leaves the choice to the PC. */
+    val onSelectSource: (String?) -> Unit = {},
+    val onReloadSources: () -> Unit = {},
 )
 
 /** The PCs list. Every PC is addressed by its id. */

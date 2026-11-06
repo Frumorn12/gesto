@@ -65,7 +65,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.IntOffset
 import it.frumorn.gesto.R
-import it.frumorn.gesto.core.model.StreamProfile
+import it.frumorn.gesto.core.model.QualityPreset
 import it.frumorn.gesto.core.model.TouchMode
 import it.frumorn.gesto.ui.components.GestoIcons
 import it.frumorn.gesto.ui.navigation.QuickMenuEntry
@@ -384,13 +384,15 @@ val TouchMode.label: Int
         TouchMode.Direct -> R.string.touch_mode_direct
     }
 
-/** The plain name of a quality (the old Game profile counts as Smooth). */
+/** The plain name of a quality preset. */
 @get:StringRes
-val StreamProfile.qualityLabel: Int
+val QualityPreset.qualityLabel: Int
     get() = when (this) {
-        StreamProfile.Balanced -> R.string.quality_automatic
-        StreamProfile.LowLatency, StreamProfile.Game -> R.string.quality_smooth
-        StreamProfile.Quality -> R.string.quality_sharp
+        QualityPreset.Auto -> R.string.quality_automatic
+        QualityPreset.Smooth -> R.string.quality_smooth
+        QualityPreset.Sharp -> R.string.quality_sharp
+        QualityPreset.Saver -> R.string.quality_saver
+        QualityPreset.Custom -> R.string.quality_custom
     }
 
 private val PreviewEntries = QuickMenuEntry.entries.filter { it != QuickMenuEntry.BackToPcs }

@@ -1,9 +1,11 @@
 package it.frumorn.gesto.ui.screens
 
+import androidx.annotation.StringRes
+import it.frumorn.gesto.R
 import it.frumorn.gesto.core.model.ScreenSource
 
 /**
- * How capture sources are grouped for the picker.
+ * How capture sources are grouped in Advanced.
  *
  * The daemon offers the same two monitors through three backends that differ by an order of
  * magnitude in speed, and used to present them as one flat list labelled with backend names. That
@@ -11,15 +13,9 @@ import it.frumorn.gesto.core.model.ScreenSource
  * frames a second of JPEG, with nothing on screen to explain why. Grouping by speed puts the
  * consequence in front of the choice.
  */
-enum class SourceGroup(val title: String, val caption: String) {
-    Recommended(
-        title = "Recommended",
-        caption = "Hardware encoding, full frame rate",
-    ),
-    Fallback(
-        title = "Fallbacks",
-        caption = "Much slower — only if the recommended source fails",
-    ),
+enum class SourceGroup(@StringRes val title: Int, @StringRes val caption: Int) {
+    Recommended(R.string.source_group_recommended, R.string.source_group_recommended_text),
+    Fallback(R.string.source_group_fallback, R.string.source_group_fallback_text),
 }
 
 /** How one capture backend is described to the user. */
@@ -27,16 +23,21 @@ private data class BackendDescriptor(
     val group: SourceGroup,
     /** Appended to the monitor name; `null` when the source is already uniquely named. */
     val tag: String?,
-    val quality: String,
+    /** What it costs, in words; `null` for a backend the app doesn't know (its name is shown). */
+    @StringRes val quality: Int?,
     val fast: Boolean,
 )
 
-/** A capture source as the picker shows it. */
+/** A capture source as Advanced shows it. */
 data class SourcePresentation(
     val id: String,
     val group: SourceGroup,
     val title: String,
-    val detail: String,
+    /** What the backend costs, in words; `null` when unknown, then [backend] is all there is. */
+    @StringRes val quality: Int?,
+    val backend: String,
+    /** "1920 × 1080" when the daemon knows the size. */
+    val resolution: String?,
     val fast: Boolean,
 )
 
@@ -49,12 +50,12 @@ fun presentSource(source: ScreenSource): SourcePresentation {
     }
     val descriptor = when (source.backend) {
         "wayland-screencast-portal" ->
-            BackendDescriptor(SourceGroup.Recommended, null, "Hardware H.264, up to 60 fps", true)
+            BackendDescriptor(SourceGroup.Recommended, null, R.string.source_quality_portal, true)
         "hyprland-grim" ->
-            BackendDescriptor(SourceGroup.Fallback, "Screenshot", "Screenshot capture, about 6 fps", false)
+            BackendDescriptor(SourceGroup.Fallback, "Screenshot", R.string.source_quality_grim, false)
         "x11-ffmpeg" ->
-            BackendDescriptor(SourceGroup.Fallback, "X11", "X11 and JPEG, no approval needed", false)
-        else -> BackendDescriptor(SourceGroup.Fallback, source.backend, source.backend, false)
+            BackendDescriptor(SourceGroup.Fallback, "X11", R.string.source_quality_x11, false)
+        else -> BackendDescriptor(SourceGroup.Fallback, source.backend, null, false)
     }
     // The same monitor appears once per fallback backend, so the method has to be part of the
     // name: two rows both reading "eDP-1" are impossible to tell apart at a glance.
@@ -63,7 +64,9 @@ fun presentSource(source: ScreenSource): SourcePresentation {
         id = source.id,
         group = descriptor.group,
         title = title,
-        detail = listOfNotNull(descriptor.quality, resolution).joinToString(" · "),
+        quality = descriptor.quality,
+        backend = source.backend,
+        resolution = resolution,
         fast = descriptor.fast,
     )
 }
@@ -87,12 +90,3 @@ fun groupSources(sources: List<ScreenSource>): List<Pair<SourceGroup, List<Sourc
         .map { group -> group to presented.filter { it.group == group } }
         .filter { (_, items) -> items.isNotEmpty() }
 }
-
-/**
- * The source to stream when the user has not chosen one.
- *
- * Always the fastest available: someone who opens the app to share a screen wants it to work, not
- * to learn the difference between PipeWire and X11 first.
- */
-fun defaultSourceId(sources: List<ScreenSource>): String? =
-    sources.firstOrNull { presentSource(it).fast }?.id ?: sources.firstOrNull()?.id

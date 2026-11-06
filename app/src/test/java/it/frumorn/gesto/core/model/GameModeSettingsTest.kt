@@ -5,7 +5,7 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class GameModeSettingsTest {
-    private val sharp = StreamProfile.Quality.toStreamSettings(showStats = false)
+    private val sharp = QualityPreset.Sharp.settings(showStats = false)
 
     @Test
     fun turningOnUsesTheSmoothPresetAndRemembersTheCurrentSettings() {
@@ -16,8 +16,8 @@ class GameModeSettingsTest {
     }
 
     @Test
-    fun theSmoothPresetIsTheLowLatencyProfile() {
-        assertEquals(StreamProfile.LowLatency, GameModePreset.profile)
+    fun gameModeStreamsWithTheSmoothPreset() {
+        assertEquals(QualityPreset.Smooth, GameModePreset.preset)
         assertEquals(1280, GameModePreset.maxDimension)
         assertEquals(60, GameModePreset.maxFps)
         assertEquals(58, GameModePreset.jpegQuality)
@@ -32,8 +32,17 @@ class GameModeSettingsTest {
     }
 
     @Test
+    fun turningOffRestoresACustomQualityWithItsValues() {
+        val custom = StreamSettings(QualityPreset.Custom, maxFps = 45, jpegQuality = 80, maxDimension = 2560, showStats = true)
+
+        val (next, _) = gameModeChange(enable = false, current = GameModePreset, saved = custom)
+
+        assertEquals(custom, next)
+    }
+
+    @Test
     fun turningOffWithNothingRememberedKeepsTheCurrentSettings() {
-        val current = StreamProfile.Balanced.toStreamSettings(showStats = true)
+        val current = QualityPreset.Auto.settings(showStats = true)
 
         val (next, saved) = gameModeChange(enable = false, current = current, saved = null)
 
@@ -43,7 +52,7 @@ class GameModeSettingsTest {
 
     @Test
     fun turningOffAfterChoosingAnotherQualityKeepsThatChoice() {
-        val chosen = StreamProfile.Balanced.toStreamSettings(showStats = true)
+        val chosen = QualityPreset.Saver.settings(showStats = true)
 
         val (next, saved) = gameModeChange(enable = false, current = chosen, saved = sharp)
 
@@ -59,29 +68,23 @@ class GameModeSettingsTest {
     }
 
     @Test
-    fun qualityCyclesAutomaticSmoothSharp() {
-        assertEquals(StreamProfile.LowLatency, nextQuality(StreamProfile.Balanced))
-        assertEquals(StreamProfile.Quality, nextQuality(StreamProfile.LowLatency))
-        assertEquals(StreamProfile.Balanced, nextQuality(StreamProfile.Quality))
-    }
-
-    @Test
-    fun theGameProfileCountsAsSmooth() {
-        assertEquals(StreamProfile.LowLatency, shownQuality(StreamProfile.Game))
-        assertEquals(StreamProfile.Quality, nextQuality(StreamProfile.Game))
-    }
-
-    @Test
     fun rememberedSettingsSurviveBeingStored() {
-        val settings = StreamSettings(StreamProfile.Quality, maxFps = 45, jpegQuality = 80, maxDimension = 1920, showStats = false)
+        val custom = StreamSettings(QualityPreset.Custom, maxFps = 45, jpegQuality = 80, maxDimension = 1920, showStats = false)
 
-        assertEquals(settings, decodeStreamSettings(encodeStreamSettings(settings)))
+        assertEquals(custom, decodeStreamSettings(encodeStreamSettings(custom)))
+        assertEquals(sharp, decodeStreamSettings(encodeStreamSettings(sharp)))
+    }
+
+    @Test
+    fun anOldProfileRememberedBeforeTheUpdateComesBackAsAuto() {
+        assertEquals(QualityPreset.Auto.settings(showStats = true), decodeStreamSettings("Quality;30;86;2400;true"))
     }
 
     @Test
     fun brokenStoredSettingsAreIgnored() {
         assertNull(decodeStreamSettings("nonsense"))
-        assertNull(decodeStreamSettings("Unknown;30;70;1600;true"))
+        assertNull(decodeStreamSettings("Auto;thirty;70;1600;true"))
+        assertNull(decodeStreamSettings("Auto;30;70;1600;maybe"))
         assertNull(decodeStreamSettings(""))
     }
 }

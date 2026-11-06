@@ -102,6 +102,9 @@
     <string name="quality_automatic">Automatica</string>
     <string name="quality_smooth">Fluida</string>
     <string name="quality_sharp">Nitida</string>
+    <string name="quality_saver">Risparmio</string>
+    <string name="quality_custom">Personalizzata</string>
+    <string name="notice_quality_lowered">Rete lenta: qualità ridotta.</string>
     <string name="notice_game_mode_on">Modalità gioco: 60 fps, tutto schermo, controller attivo</string>
     <string name="notice_game_mode_off">Modalità gioco spenta</string>
 
@@ -207,4 +210,105 @@
     <string name="commands_suspend_title">Sospendere %1$s?</string>
     <string name="commands_suspend_confirm">Sospendi</string>
     <string name="commands_cancel">Annulla</string>
+
+    <!-- Impostazioni -->
+    <string name="settings_section_screen">Schermo remoto</string>
+    <string name="settings_section_touchpad">Touchpad</string>
+    <string name="settings_section_look">Aspetto</string>
+    <string name="settings_section_more">Altro</string>
+    <string name="settings_quality">Qualità</string>
+    <string name="settings_quality_auto">Sceglie in base alla rete. Adesso: %1$dp, %2$d fps.</string>
+    <string name="settings_quality_smooth">60 fps, immagine un po\' più morbida. Per giocare.</string>
+    <string name="settings_quality_sharp">Testo leggibile, 30 fps. Per lavorare.</string>
+    <string name="settings_quality_saver">720p, 30 fps. Per la rete lenta o la batteria.</string>
+    <string name="settings_quality_custom">I tuoi valori da Avanzate: %1$dp, %2$d fps.</string>
+    <string name="settings_touch">Tocco sullo schermo</string>
+    <string name="settings_stats">Mostra fps e ritardo</string>
+    <string name="settings_stats_text">Una riga piccola sopra lo schermo.</string>
+    <string name="settings_pointer_speed">Velocità del puntatore</string>
+    <string name="settings_pointer_speed_value">%1$.1f×</string>
+    <string name="settings_acceleration">Accelerazione</string>
+    <string name="settings_acceleration_text">Più veloce muovi il dito, più va lontano il puntatore.</string>
+    <string name="settings_two_finger">Tocco a due dita = clic destro</string>
+    <string name="settings_haptics">Vibrazione</string>
+    <string name="settings_haptics_text">Un tocco leggero a ogni clic.</string>
+    <string name="settings_theme">Tema</string>
+    <string name="theme_system">Sistema</string>
+    <string name="theme_light">Chiaro</string>
+    <string name="theme_dark">Scuro</string>
+    <string name="settings_rounded">Angoli arrotondati</string>
+    <string name="settings_rounded_text">Angoli più morbidi su pulsanti e schede.</string>
+    <string name="settings_advanced">Avanzate: fps, risoluzione, qualità, sorgente dello schermo</string>
+    <string name="settings_about">Informazioni e licenze</string>
+    <string name="about_title">Gesto %1$s</string>
+    <string name="about_gesto">Gesto è software libero con licenza MIT.</string>
+    <string name="about_manrope">Il font Manrope è distribuito con la SIL Open Font License 1.1.</string>
+    <string name="about_close">Chiudi</string>
+
+    <!-- Avanzate -->
+    <string name="advanced_title">Avanzate</string>
+    <string name="advanced_now">Adesso: %1$s · %2$s</string>
+    <string name="advanced_custom_note">Se cambi un valore qui, la qualità diventa Personalizzata.</string>
+    <string name="advanced_section_stream">Flusso video</string>
+    <string name="advanced_fps">Fotogrammi al secondo</string>
+    <string name="advanced_dimension">Lato lungo dell\'immagine (px)</string>
+    <string name="advanced_encoder_quality">Qualità di codifica</string>
+    <string name="advanced_encoder_quality_text">Più alta è più nitida e chiede una rete più veloce.</string>
+    <string name="advanced_source">Sorgente dello schermo</string>
+    <string name="advanced_source_remembered">Quella che ricorda il PC</string>
+    <string name="advanced_source_remembered_text">Lo schermo scelto l\'ultima volta sul PC</string>
+    <string name="advanced_source_loading">Chiedo al PC i suoi schermi…</string>
+    <string name="advanced_source_none">Il PC non elenca schermi.</string>
+    <string name="advanced_source_offline">Collegati a un PC per sceglierne lo schermo.</string>
+    <string name="advanced_source_reload">Chiedi di nuovo</string>
+    <string name="source_group_recommended">Consigliate</string>
+    <string name="source_group_recommended_text">Codifica hardware, fotogrammi pieni</string>
+    <string name="source_group_fallback">Di riserva</string>
+    <string name="source_group_fallback_text">Molto più lente: solo se la consigliata non va</string>
+    <string name="source_quality_portal">H.264 hardware, fino a 60 fps</string>
+    <string name="source_quality_grim">Screenshot, circa 6 fps</string>
+    <string name="source_quality_x11">X11 e JPEG, senza approvazione</string>
+
+    <!-- Diagnostica -->
+    <string name="diag_refresh">Aggiorna</string>
+    <string name="diag_section_link">Collegamento</string>
+    <string name="diag_section_input">Input</string>
+    <string name="diag_section_screen">Schermo</string>
+    <string name="diag_section_audio">Audio</string>
+    <string name="diag_section_devices">Dispositivi esterni</string>
+    <string name="diag_state">Stato</string>
+    <string name="diag_route">Percorso</string>
+    <string name="diag_home_network">Rete di casa</string>
+    <string name="diag_internet">Da internet</string>
+    <string name="diag_relay">Tramite relay</string>
+    <string name="diag_details">Dettagli</string>
+    <string name="diag_input_method">Puntatore e tasti</string>
+    <string name="diag_brightness">Luminosità</string>
+    <string name="diag_clipboard">Appunti</string>
+    <string name="diag_lock">Blocco</string>
+    <string name="diag_suspend">Sospensione</string>
+    <string name="diag_sharing">Condivisione schermo</string>
+    <string name="diag_streaming">In onda ora</string>
+    <string name="diag_video">Video</string>
+    <string name="diag_quality">Qualità</string>
+    <string name="diag_fps_asked">fps richiesti</string>
+    <string name="diag_fps_pc">fps dal PC</string>
+    <string name="diag_fps_shown">fps mostrati</string>
+    <string name="diag_frame_size">Fotogramma medio</string>
+    <string name="diag_frames">Fotogrammi ricevuti</string>
+    <string name="diag_bitrate">Flusso di dati</string>
+    <string name="diag_status">Stato</string>
+    <string name="diag_last_error">Ultimo errore</string>
+    <string name="diag_audio_from_pc">Suono dal PC</string>
+    <string name="diag_audio_muted">Muto sul telefono</string>
+    <string name="diag_volume">Volume del PC</string>
+    <string name="diag_mouse">Mouse verso il PC</string>
+    <string name="diag_keyboard">Tastiera verso il PC</string>
+    <string name="diag_controller">Controller verso il PC</string>
+    <string name="diag_no_devices">Nessuna tastiera, mouse o controller collegato al telefono.</string>
+    <string name="diag_yes">sì</string>
+    <string name="diag_no">no</string>
+    <string name="diag_none">nessuno</string>
+    <string name="diag_quality_auto">%1$s · gradino %2$d di %3$d</string>
+    <string name="diag_on_pc">Sul PC: %1$s</string>
 </resources>

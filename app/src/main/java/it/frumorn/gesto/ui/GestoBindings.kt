@@ -13,14 +13,16 @@ import it.frumorn.gesto.core.model.CapabilitySummary
 import it.frumorn.gesto.core.model.ConnectionState
 import it.frumorn.gesto.core.model.DiscoveredHost
 import it.frumorn.gesto.core.model.label
-import it.frumorn.gesto.core.model.shownQuality
 import it.frumorn.gesto.core.network.identity
 import it.frumorn.gesto.core.session.Presence
 import it.frumorn.gesto.core.session.isLocalNetworkAddress
 import it.frumorn.gesto.remoteScreenFullscreen
 import it.frumorn.gesto.sessionMode
+import it.frumorn.gesto.streamingSettings
 import it.frumorn.gesto.ui.navigation.quickMenuEntries
 import it.frumorn.gesto.ui.state.AddPcActions
+import it.frumorn.gesto.ui.state.AdvancedActions
+import it.frumorn.gesto.ui.state.AdvancedUiState
 import it.frumorn.gesto.ui.state.AddPcUiState
 import it.frumorn.gesto.ui.state.ControlsActions
 import it.frumorn.gesto.ui.state.ControlsUiState
@@ -69,6 +71,7 @@ class GestoActions(
     val keyboard: KeyboardActions = KeyboardActions(),
     val controls: ControlsActions = ControlsActions(),
     val settings: SettingsActions = SettingsActions(),
+    val advanced: AdvancedActions = AdvancedActions(),
     val home: HomeActions = HomeActions(),
     val diagnostics: DiagnosticsActions = DiagnosticsActions(),
 )
@@ -145,16 +148,25 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
             onLaunchApp = viewModel::launchApp,
         ),
         settings = SettingsActions(
-            onSelectProfile = viewModel::setStreamProfile,
-            onSetMaxFps = viewModel::setStreamMaxFps,
-            onSetMaxDimension = viewModel::setStreamMaxDimension,
-            onSetJpegQuality = viewModel::setStreamJpegQuality,
+            onSelectQuality = viewModel::setQualityPreset,
+            onSetTouchMode = viewModel::setTouchMode,
             onToggleStats = viewModel::toggleStreamStats,
+            onSetPointerSpeed = viewModel::setPointerSpeed,
+            onSetPointerAcceleration = viewModel::setPointerAcceleration,
+            onSetTwoFingerRightClick = viewModel::setTwoFingerRightClick,
             onToggleHaptics = viewModel::toggleHaptics,
-            onSetGameMode = viewModel::setRemoteScreenGameMode,
-            onOpenTrustedHosts = { viewModel.go(Screen.Home) },
+            onSetThemeMode = viewModel::setThemeMode,
+            onSetRoundedCorners = viewModel::setRoundedCorners,
+            onOpenPcs = { viewModel.go(Screen.Home) },
             onOpenDiagnostics = { viewModel.go(Screen.Diagnostics) },
-            onDisconnect = viewModel::disconnect,
+            onOpenAdvanced = { viewModel.go(Screen.Advanced) },
+        ),
+        advanced = AdvancedActions(
+            onSetFps = viewModel::setStreamMaxFps,
+            onSetMaxDimension = viewModel::setStreamMaxDimension,
+            onSetQuality = viewModel::setStreamJpegQuality,
+            onSelectSource = viewModel::selectScreenSource,
+            onReloadSources = viewModel::loadScreenSources,
         ),
         home = HomeActions(
             onConnect = viewModel::connectById,
@@ -189,7 +201,7 @@ internal fun GestoUiState.toQuickMenuState(): QuickMenuUiState {
         entries = quickMenuEntries(mode, capabilities.captureSupported),
         audioOn = !audioMuted,
         touchMode = touchMode,
-        quality = shownQuality(streamSettings.profile),
+        quality = streamSettings.preset,
         gameMode = remoteScreenGameMode,
         showButton = screen == Screen.Display,
         buttonX = quickButtonX,
@@ -263,9 +275,25 @@ internal fun GestoUiState.toControlsState(): ControlsUiState = ControlsUiState(
 )
 
 internal fun GestoUiState.toSettingsState(): SettingsUiState = SettingsUiState(
-    streamSettings = streamSettings,
+    quality = streamSettings.preset,
+    streaming = streamingSettings,
+    touchMode = touchMode,
+    showStats = streamSettings.showStats,
+    pointerSpeed = pointerSpeed,
+    pointerAcceleration = pointerAcceleration,
+    twoFingerRightClick = twoFingerRightClick,
     haptics = haptics,
-    gameMode = remoteScreenGameMode,
+    themeMode = themeMode,
+    roundedCorners = roundedCorners,
+)
+
+internal fun GestoUiState.toAdvancedState(): AdvancedUiState = AdvancedUiState(
+    quality = streamSettings.preset,
+    streaming = streamingSettings,
+    connected = connectedHost != null && connectionState == ConnectionState.Connected,
+    sources = screenSources,
+    sourcesLoading = screenSourcesLoading,
+    selectedSourceId = selectedScreenSourceId,
 )
 
 /**
@@ -308,4 +336,7 @@ internal fun GestoUiState.toDiagnosticsState(): DiagnosticsUiState = Diagnostics
     stats = screenStreamStats,
     screenStatus = screenStatus,
     screenError = screenError,
+    audioMuted = audioMuted,
+    quality = streamSettings.preset,
+    autoQualityRung = autoQualityRung,
 )

@@ -7,12 +7,14 @@ import it.frumorn.gesto.core.externalinput.ExternalInputDeviceSummary
 import it.frumorn.gesto.core.model.CapabilitySummary
 import it.frumorn.gesto.core.model.RemoteApp
 import it.frumorn.gesto.core.model.ScreenStreamStats
-import it.frumorn.gesto.core.model.StreamProfile
+import it.frumorn.gesto.core.model.QualityPreset
+import it.frumorn.gesto.core.model.ScreenSource
 import it.frumorn.gesto.core.model.StreamSettings
 import it.frumorn.gesto.core.model.TouchMode
 import it.frumorn.gesto.core.session.Presence
 import it.frumorn.gesto.ui.navigation.QuickMenuEntry
 import it.frumorn.gesto.ui.text.UiText
+import it.frumorn.gesto.ui.theme.ThemeMode
 
 /**
  * Immutable per-screen view state.
@@ -45,8 +47,8 @@ data class QuickMenuUiState(
     val entries: List<QuickMenuEntry> = emptyList(),
     val audioOn: Boolean = true,
     val touchMode: TouchMode = TouchMode.Touchpad,
-    /** The quality shown (Automatic, Smooth or Sharp, see `shownQuality`). */
-    val quality: StreamProfile = StreamProfile.Balanced,
+    /** The quality chosen; the menu line flips through Auto, Smooth, Sharp and Saver. */
+    val quality: QualityPreset = QualityPreset.Auto,
     val gameMode: Boolean = false,
     val showButton: Boolean = false,
     /** Where the button sits, as fractions (0..1) of the room it can move in. */
@@ -148,11 +150,34 @@ data class ControlsUiState(
     val apps: List<RemoteApp> = emptyList(),
 )
 
+/** Settings, in plain words: the quality, touch, the touchpad's feel and the app's look. */
 @Immutable
 data class SettingsUiState(
-    val streamSettings: StreamSettings = StreamSettings(),
+    val quality: QualityPreset = QualityPreset.Auto,
+    /** What streams now (Auto's current rung included), for the line under the quality. */
+    val streaming: StreamSettings = StreamSettings(),
+    val touchMode: TouchMode = TouchMode.Touchpad,
+    val showStats: Boolean = true,
+    /** 0.5 to 3.0. */
+    val pointerSpeed: Float = 1f,
+    val pointerAcceleration: Boolean = true,
+    val twoFingerRightClick: Boolean = true,
     val haptics: Boolean = true,
-    val gameMode: Boolean = false,
+    val themeMode: ThemeMode = ThemeMode.System,
+    val roundedCorners: Boolean = false,
+)
+
+/** Advanced: the stream's own values and the PC's screen to show. */
+@Immutable
+data class AdvancedUiState(
+    val quality: QualityPreset = QualityPreset.Auto,
+    /** What streams now (Auto's current rung included); the controls show these values. */
+    val streaming: StreamSettings = StreamSettings(),
+    val connected: Boolean = false,
+    val sources: List<ScreenSource> = emptyList(),
+    val sourcesLoading: Boolean = false,
+    /** The screen chosen for the next stream; null leaves it to the PC (the one it remembers). */
+    val selectedSourceId: String? = null,
 )
 
 /** One paired PC on the PCs list. */
@@ -185,4 +210,8 @@ data class DiagnosticsUiState(
     val stats: ScreenStreamStats = ScreenStreamStats(),
     val screenStatus: String = "Screen stream idle",
     val screenError: String? = null,
+    val audioMuted: Boolean = false,
+    val quality: QualityPreset = QualityPreset.Auto,
+    /** The rung Automatic has stepped down to (0 = best). */
+    val autoQualityRung: Int = 0,
 )

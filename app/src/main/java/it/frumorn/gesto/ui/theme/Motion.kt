@@ -26,6 +26,8 @@ object GestoMotion {
     const val PULSE_MS = 1800
     const val WRITE_MS = 1300
     const val ENTER_OFFSET_DP = 10
+    /** A switch's knob sliding across. */
+    const val SWITCH_MS = 250
 
     /** A screen arrives rising [ENTER_OFFSET_DP] and fading in; the old one fades out quicker. */
     fun screenChange(enterOffsetPx: Int): ContentTransform =

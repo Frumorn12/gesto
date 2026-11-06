@@ -64,6 +64,8 @@ data class GestoAccentTypography(
     val pinDigit: TextStyle = style(30, 36, FontWeight.SemiBold),
     /** A command to type on the PC (`gesto pair`). */
     val command: TextStyle = style(14, 20, FontWeight.Medium).copy(fontFamily = FontFamily.Monospace),
+    /** A technical value in Advanced and Diagnostics (fps, backends, sizes). */
+    val readout: TextStyle = style(12, 16, FontWeight.Medium).copy(fontFamily = FontFamily.Monospace),
 )
 
 val LocalGestoAccentTypography = staticCompositionLocalOf { GestoAccentTypography() }

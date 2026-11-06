@@ -1,5 +1,6 @@
 package it.frumorn.gesto.ui.screens
 
+import it.frumorn.gesto.R
 import it.frumorn.gesto.core.model.ScreenSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -53,14 +54,15 @@ class StreamSourcePresentationTest {
 
     @Test
     fun `the detail says what it costs, not which library it uses`() {
-        assertTrue(presentSource(grim).detail.contains("6 fps"))
-        assertTrue(presentSource(portal).detail.contains("60 fps"))
+        assertEquals(R.string.source_quality_grim, presentSource(grim).quality)
+        assertEquals(R.string.source_quality_portal, presentSource(portal).quality)
+        assertEquals(R.string.source_quality_x11, presentSource(x11).quality)
     }
 
     @Test
     fun `the resolution is shown when the daemon knows it`() {
-        assertTrue(presentSource(grim).detail.contains("1920 × 1080"))
-        assertFalse(presentSource(portal).detail.contains("×"))
+        assertEquals("1920 × 1080", presentSource(grim).resolution)
+        assertNull(presentSource(portal).resolution)
     }
 
     @Test
@@ -89,7 +91,9 @@ class StreamSourcePresentationTest {
         val presented = presentSource(future)
         assertEquals(SourceGroup.Fallback, presented.group)
         assertFalse(presented.fast)
-        assertTrue(presented.detail.contains("some-future-backend"))
+        // Nothing to say about it in words: its name is what is shown.
+        assertNull(presented.quality)
+        assertEquals("some-future-backend", presented.backend)
     }
 
     @Test
@@ -106,20 +110,6 @@ class StreamSourcePresentationTest {
         assertEquals(listOf(SourceGroup.Fallback), grouped.map { it.first })
     }
 
-    @Test
-    fun `the default is the fastest source regardless of the order it arrives in`() {
-        assertEquals("portal:chooser", defaultSourceId(listOf(x11, grim, portal)))
-    }
-
-    @Test
-    fun `with no fast source the first one is used rather than none`() {
-        assertEquals("hyprland:monitor:eDP-1", defaultSourceId(listOf(grim, x11)))
-    }
-
-    @Test
-    fun `an empty list has no default`() {
-        assertNull(defaultSourceId(emptyList()))
-    }
     @Test
     fun `the same monitor on two backends does not produce two identical rows`() {
         val viaGrim = source("hyprland:monitor:eDP-1", "eDP-1 (BOE 0x0BCA)", "hyprland-grim")

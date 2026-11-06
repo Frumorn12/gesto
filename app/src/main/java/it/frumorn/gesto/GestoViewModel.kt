@@ -28,16 +28,20 @@ import it.frumorn.gesto.core.model.RemoteScreenConnectionState
 import it.frumorn.gesto.core.model.ScreenSource
 import it.frumorn.gesto.core.model.ScreenStreamInfo
 import it.frumorn.gesto.core.model.ScreenStreamStats
-import it.frumorn.gesto.core.model.StreamProfile
+import it.frumorn.gesto.core.model.QualityPreset
 import it.frumorn.gesto.core.model.StreamSettings
 import it.frumorn.gesto.core.model.TouchMode
+import it.frumorn.gesto.core.model.atRung
 import it.frumorn.gesto.core.model.gameModeChange
 import it.frumorn.gesto.core.model.nextQuality
+import it.frumorn.gesto.core.model.settings
 import it.frumorn.gesto.core.model.TrustedHost
 import it.frumorn.gesto.core.model.formatFps
 import it.frumorn.gesto.core.model.MAX_PC_NAME_LENGTH
 import it.frumorn.gesto.core.model.label
+import it.frumorn.gesto.core.video.AutoQualityController
 import it.frumorn.gesto.core.video.RemoteScreenVideoSession
+import it.frumorn.gesto.core.video.StreamDelay
 import it.frumorn.gesto.core.network.ConnectResult
 import it.frumorn.gesto.core.network.GestoApiException
 import it.frumorn.gesto.core.network.GestoClient
@@ -116,6 +120,10 @@ private val SettingsScreens = setOf(Screen.Settings, Screen.Advanced, Screen.Dia
 val GestoUiState.remoteScreenFullscreen: Boolean
     get() = screen == Screen.Display && (landscape || remoteScreenGameMode)
 
+/** What the screen streams with now: the chosen quality, at Auto's current rung. */
+val GestoUiState.streamingSettings: StreamSettings
+    get() = streamSettings.atRung(autoQualityRung)
+
 /** Intent extra (and `gesto://connect?host=` parameter) naming the paired PC to open on. */
 const val EXTRA_CONNECT_HOST = "it.frumorn.gesto.CONNECT_HOST"
 
@@ -164,6 +172,8 @@ data class GestoUiState(
     val externalInputDevices: List<ExternalInputDeviceSummary> = emptyList(),
     val externalInputStatus: String = "No external input devices detected",
     val screenSources: List<ScreenSource> = emptyList(),
+    /** Advanced is waiting for the PC's list of screens. */
+    val screenSourcesLoading: Boolean = false,
     val selectedScreenSourceId: String? = null,
     val screenStreamInfo: ScreenStreamInfo? = null,
     /**
@@ -188,7 +198,10 @@ data class GestoUiState(
     val quickButtonY: Float = 1f,
     /** The button pulses in this session (one of the first few) until the menu is opened. */
     val quickMenuPulse: Boolean = false,
+    /** The quality chosen; for Auto, the values of its first rung (see [streamingSettings]). */
     val streamSettings: StreamSettings = StreamSettings(),
+    /** The rung Auto has stepped down to in this session (0 = best); it only goes down. */
+    val autoQualityRung: Int = 0,
     val screenStreamStats: ScreenStreamStats = ScreenStreamStats(),
     val screenStatus: String = "Screen stream idle",
     val screenError: String? = null,
@@ -226,6 +239,11 @@ class GestoViewModel(
         const val TOUCHPAD_HINT_SESSIONS = 5
         /** The quick-menu button pulses in this many sessions. */
         const val QUICK_MENU_HINT_SESSIONS = 5
+        /**
+         * The Automatic quality starts judging a stream this long after its first frame: the
+         * frame rate is measured over the last 2 s, so it is still filling up before that.
+         */
+        const val AUTO_QUALITY_WARMUP_MS = 2_000L
     }
 
     private val discovery = GestoDiscovery(application)
@@ -240,6 +258,12 @@ class GestoViewModel(
     private var interactionEndJob: Job? = null
     private var screenStreamJob: Job? = null
     private var screenStreamDesired = false
+    /** Steps the Automatic quality down while the network can't keep up; reset for every session. */
+    private val autoQuality = AutoQualityController()
+    /** Whether this stream's frames queue up on the way (the network falls behind). */
+    private val streamDelay = StreamDelay()
+    /** When the stream on screen showed its first frame (monotonic ms); 0 before that. */
+    private var streamShownAtMs = 0L
     private val screenSessionMachine = RemoteScreenSessionMachine()
     private var activeInteractionSessionId = 0L
     private var nextInteractionSessionId = 0L
@@ -300,7 +324,7 @@ class GestoViewModel(
         viewModelScope.launch { runHealthPing() }
         viewModelScope.launch {
             settingsRepo.streamSettings.collect { settings ->
-                Log.i(TAG, "settings_loaded profile=${settings.profile} fps=${settings.maxFps} quality=${settings.jpegQuality} dimension=${settings.maxDimension}")
+                Log.i(TAG, "settings_loaded preset=${settings.preset} fps=${settings.maxFps} quality=${settings.jpegQuality} dimension=${settings.maxDimension}")
                 _state.update { it.copy(streamSettings = settings) }
             }
         }
@@ -602,6 +626,11 @@ class GestoViewModel(
             publishCurrentExternalDevices()
         }
         if (screen == Screen.Touchpad) decideTouchpadHints()
+        // Advanced offers the PC's screens; the Screen itself streams the one the PC remembers.
+        val connected = _state.value.connectedHost != null && _state.value.connectionState == ConnectionState.Connected
+        if (screen == Screen.Advanced && previous != Screen.Advanced && connected) {
+            loadScreenSources()
+        }
         if (screen == Screen.Display) {
             decideQuickMenuPulse()
             autoStartScreenStream()
@@ -708,7 +737,7 @@ class GestoViewModel(
             QuickMenuEntry.TouchMode -> setTouchMode(
                 if (s.touchMode == TouchMode.Touchpad) TouchMode.Direct else TouchMode.Touchpad,
             )
-            QuickMenuEntry.Quality -> setStreamProfile(nextQuality(s.streamSettings.profile))
+            QuickMenuEntry.Quality -> setQualityPreset(nextQuality(s.streamSettings.preset))
             QuickMenuEntry.GameMode -> {
                 setQuickMenuOpen(false)
                 val enable = !s.remoteScreenGameMode
@@ -928,34 +957,52 @@ class GestoViewModel(
         viewModelScope.launch { settingsRepo.saveHaptics(enabled) }
     }
 
-    fun setStreamProfile(profile: StreamProfile) {
-        val restart = _state.value.screenStreaming
-        Log.i(TAG, "stream_settings_profile profile=$profile restart=$restart")
-        val newSettings = profile.toStreamSettings(showStats = _state.value.streamSettings.showStats)
-        _state.update { it.copy(streamSettings = newSettings) }
-        viewModelScope.launch { settingsRepo.saveStreamSettings(newSettings) }
-        if (restart) startScreenStream()
+    fun setPointerSpeed(speed: Float) {
+        val clamped = PointerAcceleration.clampSpeed(speed)
+        _state.update { it.copy(pointerSpeed = clamped) }
+        viewModelScope.launch { settingsRepo.savePointerSpeed(clamped) }
     }
 
-    fun setStreamMaxFps(fps: Int) {
-        _state.update {
-            it.copy(streamSettings = it.streamSettings.copy(maxFps = fps.coerceIn(5, 60)))
-        }
-        viewModelScope.launch { settingsRepo.saveStreamSettings(_state.value.streamSettings) }
+    fun setPointerAcceleration(enabled: Boolean) {
+        _state.update { it.copy(pointerAcceleration = enabled) }
+        viewModelScope.launch { settingsRepo.savePointerAcceleration(enabled) }
     }
 
-    fun setStreamJpegQuality(quality: Int) {
-        _state.update {
-            it.copy(streamSettings = it.streamSettings.copy(jpegQuality = quality.coerceIn(35, 92)))
-        }
-        viewModelScope.launch { settingsRepo.saveStreamSettings(_state.value.streamSettings) }
+    fun setTwoFingerRightClick(enabled: Boolean) {
+        _state.update { it.copy(twoFingerRightClick = enabled) }
+        viewModelScope.launch { settingsRepo.saveTwoFingerRightClick(enabled) }
     }
 
-    fun setStreamMaxDimension(dimension: Int) {
-        _state.update {
-            it.copy(streamSettings = it.streamSettings.copy(maxDimension = dimension.coerceIn(720, 3840)))
-        }
-        viewModelScope.launch { settingsRepo.saveStreamSettings(_state.value.streamSettings) }
+    /** A quality from Settings or the quick menu; a running stream starts again with it. */
+    fun setQualityPreset(preset: QualityPreset) {
+        val current = _state.value.streamSettings
+        // Custom is reached through Advanced; picked directly it keeps what streams now.
+        val custom = if (current.preset == QualityPreset.Custom) current else _state.value.streamingSettings
+        applyStreamSettings(preset.settings(custom = custom, showStats = current.showStats))
+    }
+
+    /** Advanced: own frames per second, which makes the quality Custom. */
+    fun setStreamMaxFps(fps: Int) = applyCustom { it.copy(maxFps = fps) }
+
+    /** Advanced: own encoder quality, which makes the quality Custom. */
+    fun setStreamJpegQuality(quality: Int) = applyCustom { it.copy(jpegQuality = quality) }
+
+    /** Advanced: own longest side of the picture, which makes the quality Custom. */
+    fun setStreamMaxDimension(dimension: Int) = applyCustom { it.copy(maxDimension = dimension) }
+
+    /** Advanced changes start from what streams now (Auto's current rung included). */
+    private fun applyCustom(change: (StreamSettings) -> StreamSettings) {
+        val base = _state.value.streamingSettings
+        applyStreamSettings(QualityPreset.Custom.settings(custom = change(base), showStats = base.showStats))
+    }
+
+    private fun applyStreamSettings(settings: StreamSettings) {
+        val before = _state.value
+        if (settings == before.streamSettings) return
+        Log.i(TAG, "stream_settings preset=${settings.preset} fps=${settings.maxFps} quality=${settings.jpegQuality} max=${settings.maxDimension}")
+        _state.update { it.copy(streamSettings = settings) }
+        viewModelScope.launch { settingsRepo.saveStreamSettings(settings) }
+        if (before.screenStreaming && _state.value.streamingSettings != before.streamingSettings) startScreenStream()
     }
 
     fun toggleStreamStats() {
@@ -973,7 +1020,7 @@ class GestoViewModel(
         val current = _state.value
         if (current.remoteScreenGameMode == enabled) return
         val (settings, before) = gameModeChange(enabled, current.streamSettings, current.streamSettingsBeforeGame)
-        Log.i(TAG, "remote_screen_game_mode enabled=$enabled profile=${settings.profile} remembered=${before?.profile}")
+        Log.i(TAG, "remote_screen_game_mode enabled=$enabled preset=${settings.preset} remembered=${before?.preset}")
         _state.update {
             it.copy(
                 remoteScreenGameMode = enabled,
@@ -984,7 +1031,9 @@ class GestoViewModel(
         viewModelScope.launch { settingsRepo.saveGameMode(enabled, settings, before) }
         if (enabled) publishCurrentExternalDevices()
         emitNotice(Notice(UiText.Res(if (enabled) R.string.notice_game_mode_on else R.string.notice_game_mode_off)))
-        if (current.screenStreaming && settings != current.streamSettings) startScreenStream()
+        if (current.screenStreaming && settings.atRung(current.autoQualityRung) != current.streamingSettings) {
+            startScreenStream()
+        }
     }
 
     /** "Add a PC" on the PCs list: the search step, which scans the network while it is shown. */
@@ -1378,9 +1427,11 @@ class GestoViewModel(
         interactionKeepAliveJob?.cancel()
         interactionEndJob?.cancel()
         activeInteractionSessionId = 0L
-        // The next session decides the touchpad hints and the button's pulse again.
+        // The next session decides the touchpad hints and the button's pulse again, and the
+        // Automatic quality starts again from its best rung.
         touchpadHintsDecided = false
         quickMenuPulseDecided = false
+        autoQuality.reset()
         pointerCarry.reset()
         savedStateHandle["connectedHostId"] = null
         savedStateHandle["screen"] = null
@@ -1406,6 +1457,7 @@ class GestoViewModel(
                 screenStreaming = false,
                 screenConnectionState = RemoteScreenConnectionState.Idle,
                 quickMenuPulse = false,
+                autoQualityRung = 0,
                 screenStatus = "Screen stream idle",
                 screenError = null,
             )
@@ -1636,12 +1688,15 @@ class GestoViewModel(
 
     fun loadScreenSources() {
         launchCommand("Loading screen sources...") {
-            val sources = client.listScreenSources()
+            _state.update { it.copy(screenSourcesLoading = true) }
+            val sources = try {
+                client.listScreenSources()
+            } finally {
+                _state.update { it.copy(screenSourcesLoading = false) }
+            }
             _state.update { current ->
-                val selected = current.selectedScreenSourceId
-                    ?.takeIf { id -> sources.any { it.id == id } }
-                    ?: sources.firstOrNull { it.focused }?.id
-                    ?: sources.firstOrNull()?.id
+                // No choice is made here: without one the PC streams the screen it remembers.
+                val selected = current.selectedScreenSourceId?.takeIf { id -> sources.any { it.id == id } }
                 current.copy(
                     screenSources = sources,
                     selectedScreenSourceId = selected,
@@ -1652,11 +1707,16 @@ class GestoViewModel(
         }
     }
 
-    fun selectScreenSource(sourceId: String) {
+    /** The screen the next stream shows; null leaves the choice to the PC (the one it remembers). */
+    fun selectScreenSource(sourceId: String?) {
         _state.update {
             it.copy(
                 selectedScreenSourceId = sourceId,
-                screenStatus = "Selected ${it.screenSources.firstOrNull { source -> source.id == sourceId }?.label ?: sourceId}",
+                screenStatus = if (sourceId == null) {
+                    "Source chosen by the PC"
+                } else {
+                    "Selected ${it.screenSources.firstOrNull { source -> source.id == sourceId }?.label ?: sourceId}"
+                },
             )
         }
     }
@@ -1685,11 +1745,12 @@ class GestoViewModel(
                 )
             }
             val selected = _state.value.selectedScreenSourceId
-            val settings = _state.value.streamSettings
+            val settings = _state.value.streamingSettings
+            streamShownAtMs = 0L
 
             Log.i(
                 TAG,
-                "stream_settings_apply profile=${settings.profile} fps=${settings.maxFps} quality=${settings.jpegQuality} max=${settings.maxDimension}",
+                "stream_settings_apply preset=${settings.preset} rung=${_state.value.autoQualityRung} fps=${settings.maxFps} quality=${settings.jpegQuality} max=${settings.maxDimension}",
             )
             var attempt = 0
             while (isActive && screenStreamDesired && attempt < SCREEN_STREAM_MAX_RETRIES) {
@@ -1876,6 +1937,12 @@ class GestoViewModel(
                     screenError = null,
                 )
             }
+            // Called on the stream's thread; the Automatic quality lives on the main one.
+            viewModelScope.launch {
+                streamShownAtMs = monotonicMs()
+                autoQuality.onStreamRestarted()
+                streamDelay.reset()
+            }
         }
         viewModelScope.launch {
             videoSession.stats.collect { stats ->
@@ -1889,6 +1956,7 @@ class GestoViewModel(
                         },
                     )
                 }
+                judgeAutoQuality(stats)
             }
         }
         viewModelScope.launch {
@@ -1924,6 +1992,31 @@ class GestoViewModel(
             }
         }
     }
+
+    /**
+     * The Automatic quality, fed with the frame rate of the stream on screen once it has warmed up.
+     * The PC sends a frame only when its screen changes, so a frame rate below the target counts
+     * only while the frames also arrive late; on time, the network is keeping up, whatever the
+     * rate. On a step down the stream starts again with the next rung.
+     */
+    private fun judgeAutoQuality(stats: ScreenStreamStats) {
+        val s = _state.value
+        if (s.streamSettings.preset != QualityPreset.Auto || stats.targetFps <= 0) return
+        if (s.screenConnectionState != RemoteScreenConnectionState.Streaming || streamShownAtMs == 0L) return
+        val now = monotonicMs()
+        // The quickest frame is looked for from the start: the first ones, before any queue
+        // builds up, are the best reference.
+        val late = streamDelay.isLate(stats.lastFrameAgeMs)
+        if (now - streamShownAtMs < AUTO_QUALITY_WARMUP_MS) return
+        val delivered = if (late) stats.deliveredFps else stats.targetFps.toDouble()
+        val rung = autoQuality.onStats(delivered, stats.targetFps, now) ?: return
+        Log.i(TAG, "auto_quality_lowered rung=$rung delivered=${stats.deliveredFps.formatFps()} target=${stats.targetFps}")
+        _state.update { it.copy(autoQualityRung = rung) }
+        emitNotice(Notice(UiText.Res(R.string.notice_quality_lowered)))
+        startScreenStream()
+    }
+
+    private fun monotonicMs(): Long = System.nanoTime() / 1_000_000L
 
     private fun streamStatusFor(width: Int?, height: Int?, stats: ScreenStreamStats): String {
         val backend = stats.backend.takeIf { it.isNotBlank() } ?: "unknown"

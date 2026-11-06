@@ -141,6 +141,23 @@ data class GestoSpacing(
 
     /** Room the page bar keeps opposite the back arrow, so its title stays centred. */
     val barSideSlot: Dp = 48.dp
+
+    /** One segment of a segmented control (Quality, Theme…). */
+    val segmentHeight: Dp = 40.dp
+
+    /** The square switch, its knob and the gap around the knob. */
+    val switchWidth: Dp = 42.dp
+    val switchHeight: Dp = 24.dp
+    val switchKnob: Dp = 16.dp
+    val switchInset: Dp = 3.dp
+
+    /** A slider's square thumb, the ring of page colour around it, and its track. */
+    val sliderThumb: Dp = 20.dp
+    val sliderThumbRing: Dp = 3.dp
+    val sliderTrack: Dp = 4.dp
+
+    /** The chevron at the end of a row that opens another page. */
+    val chevronSize: Dp = 18.dp
 }
 
 val LocalGestoSpacing = staticCompositionLocalOf { GestoSpacing() }

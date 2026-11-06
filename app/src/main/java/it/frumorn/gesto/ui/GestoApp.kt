@@ -57,9 +57,10 @@ import it.frumorn.gesto.ui.session.KeyboardSheet
 import it.frumorn.gesto.ui.screens.LaunchScreen
 import it.frumorn.gesto.ui.screens.DisplayScreen
 import it.frumorn.gesto.ui.screens.RemoteDisplayVideoSurface
+import it.frumorn.gesto.ui.screens.AdvancedScreen
+import it.frumorn.gesto.ui.screens.DiagnosticsScreen
 import it.frumorn.gesto.ui.screens.SettingsScreen
 import it.frumorn.gesto.ui.screens.TouchpadScreen
-import it.frumorn.gesto.ui.screens.TroubleshootingScreen
 import it.frumorn.gesto.ui.session.GestoSnackbarHost
 import it.frumorn.gesto.ui.session.QuickMenuLayer
 import it.frumorn.gesto.ui.session.SessionScaffold
@@ -258,6 +259,9 @@ private fun PlainPage(page: Screen, state: GestoUiState, actions: GestoActions) 
                     Screen.Launch -> Unit
                     Screen.Home -> GestoPageBar(onOpenSettings = actions.onOpenSettings, error = state.error)
                     Screen.AddPc -> GestoPageBar(onBack = back, title = stringResource(addPcTitle(state.addPcStep)))
+                    Screen.Settings -> GestoPageBar(onBack = back, title = stringResource(R.string.action_settings), error = state.error)
+                    Screen.Advanced -> GestoPageBar(onBack = back, title = stringResource(R.string.advanced_title), error = state.error)
+                    Screen.Diagnostics -> GestoPageBar(onBack = back, title = stringResource(R.string.settings_diagnostics), error = state.error)
                     else -> GestoPageBar(onBack = back, error = state.error)
                 }
             },
@@ -280,9 +284,8 @@ private fun PlainPage(page: Screen, state: GestoUiState, actions: GestoActions) 
                     Screen.Home -> HomeScreen(state.toHomeState(), actions.home)
                     Screen.AddPc -> AddPcScreen(state.toAddPcState(), actions.addPc)
                     Screen.Settings -> SettingsScreen(state.toSettingsState(), actions.settings)
-                    Screen.Diagnostics -> TroubleshootingScreen(state.toDiagnosticsState(), actions.diagnostics)
-                    // Advanced has no screen yet and no entry point leads to it.
-                    Screen.Advanced -> Unit
+                    Screen.Diagnostics -> DiagnosticsScreen(state.toDiagnosticsState(), actions.diagnostics)
+                    Screen.Advanced -> AdvancedScreen(state.toAdvancedState(), actions.advanced)
                     Screen.Touchpad, Screen.Display, Screen.Commands -> Unit
                 }
             }

@@ -68,6 +68,7 @@ object GestoIcons {
     /** A pencil: type something in. */
     val Edit: ImageVector by lazy { lineIcon("Edit", "M4 20h4L19 9l-4-4L4 16z", "M13 7l4 4") }
     val Chevron: ImageVector by lazy { lineIcon("Chevron", "M9 5l7 7-7 7") }
+    val Refresh: ImageVector by lazy { lineIcon("Refresh", "M20 12a8 8 0 1 1-2.34-5.66", "M20 4v5h-5") }
     val Play: ImageVector by lazy { lineIcon("Play", "M8 5l11 7-11 7z", "M5 5v14") }
     val Previous: ImageVector by lazy { lineIcon("Previous", "M18 5L8 12l10 7z", "M6 5v14") }
     val Next: ImageVector by lazy { lineIcon("Next", "M6 5l10 7-10 7z", "M18 5v14") }

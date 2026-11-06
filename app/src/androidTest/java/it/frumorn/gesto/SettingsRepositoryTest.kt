@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import it.frumorn.gesto.core.model.GameModePreset
-import it.frumorn.gesto.core.model.StreamProfile
+import it.frumorn.gesto.core.model.QualityPreset
+import it.frumorn.gesto.core.model.StreamSettings
+import it.frumorn.gesto.core.model.settings
 import it.frumorn.gesto.core.model.TouchMode
 import it.frumorn.gesto.core.storage.SettingsRepository
 import kotlinx.coroutines.flow.first
@@ -28,21 +30,22 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun firstRunDefaultsToGameMode60Fps() = runBlocking {
-        val settings = repo.streamSettings.first()
-        assertEquals(StreamProfile.Game, settings.profile)
-        assertEquals(60, settings.maxFps)
-        assertEquals(1280, settings.maxDimension)
+    fun firstRunStartsOnAutomaticQuality() = runBlocking {
+        assertEquals(QualityPreset.Auto.settings(showStats = true), repo.streamSettings.first())
     }
 
     @Test
     fun saveAndRestoreStreamSettings() = runBlocking {
-        val custom = StreamProfile.LowLatency.toStreamSettings(showStats = false)
+        val smooth = QualityPreset.Smooth.settings(showStats = false)
+        repo.saveStreamSettings(smooth)
+        assertEquals(smooth, repo.streamSettings.first())
+    }
+
+    @Test
+    fun customValuesAreKept() = runBlocking {
+        val custom = StreamSettings(QualityPreset.Custom, maxFps = 45, jpegQuality = 80, maxDimension = 2560, showStats = true)
         repo.saveStreamSettings(custom)
-        val loaded = repo.streamSettings.first()
-        assertEquals(StreamProfile.LowLatency, loaded.profile)
-        assertEquals(60, loaded.maxFps)
-        assertEquals(false, loaded.showStats)
+        assertEquals(custom, repo.streamSettings.first())
     }
 
     @Test
@@ -70,11 +73,11 @@ class SettingsRepositoryTest {
 
     @Test
     fun saveAndRestoreGameMode() = runBlocking {
-        val before = StreamProfile.Quality.toStreamSettings(showStats = false)
+        val before = QualityPreset.Sharp.settings(showStats = false)
         repo.saveGameMode(true, GameModePreset, before)
         assertEquals(true, repo.gameMode.first())
         assertEquals(before, repo.settingsBeforeGame.first())
-        assertEquals(GameModePreset.profile, repo.streamSettings.first().profile)
+        assertEquals(GameModePreset.preset, repo.streamSettings.first().preset)
 
         repo.saveGameMode(false, before, null)
         assertEquals(false, repo.gameMode.first())

@@ -103,6 +103,9 @@
     <string name="quality_automatic">Automatic</string>
     <string name="quality_smooth">Smooth</string>
     <string name="quality_sharp">Sharp</string>
+    <string name="quality_saver">Saver</string>
+    <string name="quality_custom">Custom</string>
+    <string name="notice_quality_lowered">Slow network: lowered the quality.</string>
     <string name="notice_game_mode_on">Game mode: 60 fps, full screen, controller on</string>
     <string name="notice_game_mode_off">Game mode off</string>
 
@@ -213,4 +216,111 @@
     <string name="commands_suspend_title">Suspend %1$s?</string>
     <string name="commands_suspend_confirm">Suspend</string>
     <string name="commands_cancel">Cancel</string>
+
+    <!-- Settings -->
+    <string name="settings_section_screen">Remote screen</string>
+    <string name="settings_section_touchpad">Touchpad</string>
+    <string name="settings_section_look">Appearance</string>
+    <string name="settings_section_more">More</string>
+    <string name="settings_quality">Quality</string>
+    <!-- Under the quality: %1$d is the lines of the picture (the 1080 of 1080p), %2$d the frames per second. -->
+    <string name="settings_quality_auto">Picks for your network. Now: %1$dp, %2$d fps.</string>
+    <string name="settings_quality_smooth">60 fps, a slightly softer picture. For games.</string>
+    <string name="settings_quality_sharp">Readable text, 30 fps. For work.</string>
+    <string name="settings_quality_saver">720p, 30 fps. For a slow network or to save battery.</string>
+    <string name="settings_quality_custom">Your own values from Advanced: %1$dp, %2$d fps.</string>
+    <string name="settings_touch">Touch on the screen</string>
+    <string name="settings_stats">Show fps and delay</string>
+    <string name="settings_stats_text">A small line over the screen.</string>
+    <string name="settings_pointer_speed">Pointer speed</string>
+    <!-- The pointer speed, for example 1.5×. -->
+    <string name="settings_pointer_speed_value">%1$.1f×</string>
+    <string name="settings_acceleration">Acceleration</string>
+    <string name="settings_acceleration_text">The faster your finger moves, the farther the pointer goes.</string>
+    <string name="settings_two_finger">Two-finger tap = right click</string>
+    <string name="settings_haptics">Vibration</string>
+    <string name="settings_haptics_text">A light tap on every click.</string>
+    <string name="settings_theme">Theme</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="settings_rounded">Rounded corners</string>
+    <string name="settings_rounded_text">Softer corners on buttons and cards.</string>
+    <string name="settings_advanced">Advanced: fps, resolution, quality, screen source</string>
+    <string name="settings_about">About and licences</string>
+    <string name="about_title">Gesto %1$s</string>
+    <string name="about_gesto">Gesto is free software under the MIT licence.</string>
+    <string name="about_manrope">The Manrope font is licensed under the SIL Open Font License 1.1.</string>
+    <string name="about_close">Close</string>
+
+    <!-- Advanced -->
+    <string name="advanced_title">Advanced</string>
+    <!-- %1$s is the quality name (Automatic, Custom…), %2$s its values. -->
+    <string name="advanced_now">Now: %1$s · %2$s</string>
+    <string name="advanced_values" translatable="false">%1$d px · %2$d fps · q%3$d</string>
+    <string name="advanced_custom_note">Changing a value here sets the quality to Custom.</string>
+    <string name="advanced_section_stream">Stream</string>
+    <string name="advanced_fps">Frames per second</string>
+    <string name="advanced_dimension">Long side of the picture (px)</string>
+    <string name="advanced_encoder_quality">Encoder quality</string>
+    <string name="advanced_encoder_quality_text">Higher is sharper and needs a faster network.</string>
+    <string name="advanced_source">Screen source</string>
+    <string name="advanced_source_remembered">The one the PC remembers</string>
+    <string name="advanced_source_remembered_text">The screen chosen last time on the PC</string>
+    <string name="advanced_source_loading">Asking the PC for its screens…</string>
+    <string name="advanced_source_none">The PC lists no screens.</string>
+    <string name="advanced_source_offline">Connect to a PC to choose its screen.</string>
+    <string name="advanced_source_reload">Ask again</string>
+    <string name="source_group_recommended">Recommended</string>
+    <string name="source_group_recommended_text">Hardware encoding, full frame rate</string>
+    <string name="source_group_fallback">Fallbacks</string>
+    <string name="source_group_fallback_text">Much slower: only if the recommended one fails</string>
+    <string name="source_quality_portal">Hardware H.264, up to 60 fps</string>
+    <string name="source_quality_grim">Screenshots, about 6 fps</string>
+    <string name="source_quality_x11">X11 and JPEG, no approval needed</string>
+
+    <!-- Diagnostics -->
+    <string name="diag_refresh">Refresh</string>
+    <string name="diag_section_link">Connection</string>
+    <string name="diag_section_input">Input</string>
+    <string name="diag_section_screen">Screen</string>
+    <string name="diag_section_audio">Audio</string>
+    <string name="diag_section_devices">External devices</string>
+    <string name="diag_state">State</string>
+    <string name="diag_route">Route</string>
+    <string name="diag_home_network">Home network</string>
+    <string name="diag_internet">Over the internet</string>
+    <string name="diag_relay">Through a relay</string>
+    <string name="diag_details">Details</string>
+    <string name="diag_input_method">Pointer and keys</string>
+    <string name="diag_brightness">Brightness</string>
+    <string name="diag_clipboard">Clipboard</string>
+    <string name="diag_lock">Lock</string>
+    <string name="diag_suspend">Suspend</string>
+    <string name="diag_sharing">Screen sharing</string>
+    <string name="diag_streaming">Showing now</string>
+    <string name="diag_video">Video</string>
+    <string name="diag_quality">Quality</string>
+    <string name="diag_fps_asked">fps asked for</string>
+    <string name="diag_fps_pc">fps from the PC</string>
+    <string name="diag_fps_shown">fps shown</string>
+    <string name="diag_frame_size">Average frame</string>
+    <string name="diag_frames">Frames received</string>
+    <string name="diag_bitrate">Data rate</string>
+    <string name="diag_status">Status</string>
+    <string name="diag_last_error">Last error</string>
+    <string name="diag_audio_from_pc">Sound from the PC</string>
+    <string name="diag_audio_muted">Muted on the phone</string>
+    <string name="diag_volume">PC volume</string>
+    <string name="diag_mouse">Mouse to the PC</string>
+    <string name="diag_keyboard">Keyboard to the PC</string>
+    <string name="diag_controller">Controller to the PC</string>
+    <string name="diag_no_devices">No keyboard, mouse or controller connected to the phone.</string>
+    <string name="diag_yes">yes</string>
+    <string name="diag_no">no</string>
+    <string name="diag_none">none</string>
+    <!-- %1$s is the quality name, %2$d the step Automatic is on (1 = best), %3$d how many steps there are. -->
+    <string name="diag_quality_auto">%1$s · step %2$d of %3$d</string>
+    <string name="diag_on_pc">On the PC: %1$s</string>
+    <string name="diag_doctor_command" translatable="false">gesto doctor</string>
 </resources>

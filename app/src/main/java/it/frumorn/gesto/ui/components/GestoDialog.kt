@@ -21,15 +21,16 @@ import it.frumorn.gesto.ui.theme.GestoTheme
 
 /**
  * A small floating panel over the screen: title, [content], then Cancel and the confirm action at
- * the bottom end. Square corners and a 1 dp edge like the rest of the app; the only shadow is the
- * one floating panels get. [destructive] paints the confirm action in the error colour.
+ * the bottom end (only the confirm action when [dismissText] is null; back or a tap outside still
+ * call [onDismiss]). Square corners and a 1 dp edge like the rest of the app; the only shadow is
+ * the one floating panels get. [destructive] paints the confirm action in the error colour.
  */
 @Composable
 fun GestoDialog(
     title: String,
     confirmText: String,
     onConfirm: () -> Unit,
-    dismissText: String,
+    dismissText: String?,
     onDismiss: () -> Unit,
     destructive: Boolean = false,
     content: @Composable ColumnScope.() -> Unit = {},
@@ -53,7 +54,7 @@ fun GestoDialog(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(spacing.xs, Alignment.End),
                 ) {
-                    GestoTextButton(text = dismissText, onClick = onDismiss)
+                    if (dismissText != null) GestoTextButton(text = dismissText, onClick = onDismiss)
                     GestoTextButton(
                         text = confirmText,
                         onClick = onConfirm,
