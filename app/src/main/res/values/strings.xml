@@ -80,4 +80,41 @@
     <string name="error_session_expired">This phone is no longer paired with the PC. Pair it again.</string>
     <string name="error_connection_lost">Lost the connection to %1$s.</string>
     <string name="error_generic">Something went wrong: %1$s</string>
+
+    <string name="add_confirm_title">Confirm on the PC</string>
+    <string name="add_steps">Step %1$d of %2$d</string>
+    <string name="add_searching">Looking for PCs on your network…</string>
+    <string name="add_searching_hint">Gesto has to be running on the PC.</string>
+    <string name="add_found_new">On your network</string>
+    <string name="add_found_added">Already added</string>
+    <string name="add_cant_find">Can\'t find it?</string>
+    <string name="add_scan_qr">Scan the QR from the PC</string>
+    <string name="add_type_address">Type the address</string>
+    <string name="add_pin_text">A notification with this number appeared on the PC.</string>
+    <string name="add_pin_allow">If it\'s the same, press %1$s on the PC.</string>
+    <!-- The button of the PC's notification, named as the PC shows it (the daemon labels it in English). -->
+    <string name="add_pin_allow_button" translatable="false">Allow</string>
+    <string name="add_pin_described">PIN %1$s</string>
+    <string name="add_pin_waiting">Waiting for the PC…</string>
+    <string name="add_code_text">On the PC, open a terminal and type</string>
+    <string name="add_code_command" translatable="false">gesto pair</string>
+    <string name="add_code_command_old" translatable="false">waypad-daemon pair-code</string>
+    <string name="add_code_old">On an older version: %1$s</string>
+    <string name="add_code_label">6-digit code</string>
+    <string name="add_code_submit">Add the PC</string>
+    <string name="add_address_text">The PC\'s address on your network, for example 192.168.1.20.</string>
+    <string name="add_address_label">Address</string>
+    <string name="add_port_label">Port</string>
+    <string name="add_address_submit">Continue</string>
+    <string name="notice_pc_added">%1$s added.</string>
+    <string name="error_invite_invalid">This QR isn\'t a Gesto invite.</string>
+
+    <string name="qr_command" translatable="false">gesto pair --qr</string>
+    <string name="qr_hint">On the PC, type %1$s</string>
+    <string name="qr_close">Close the camera</string>
+    <string name="qr_permission_title">Gesto needs the camera to read the QR</string>
+    <string name="qr_permission_text">The camera is used only to read the QR the PC shows.</string>
+    <string name="qr_permission_denied">Camera access was denied. Allow it to scan the QR.</string>
+    <string name="qr_allow_camera">Allow the camera</string>
+    <string name="qr_camera_failed">The camera didn\'t start.</string>
 </resources>

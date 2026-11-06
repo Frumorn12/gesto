@@ -25,12 +25,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.QrCodeScanner
-import androidx.compose.material3.Button
+import androidx.annotation.StringRes
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,10 +44,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import it.frumorn.gesto.R
+import it.frumorn.gesto.ui.components.GestoButton
+import it.frumorn.gesto.ui.components.GestoIconButton
+import it.frumorn.gesto.ui.components.GestoIcons
 import it.frumorn.gesto.ui.components.OVERLAY_ALPHA
 import it.frumorn.gesto.ui.theme.GestoOnVideoLetterbox
 import it.frumorn.gesto.ui.theme.GestoOnVideoLetterboxMuted
@@ -62,6 +68,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 private const val TAG = "GestoQrScanner"
 
+/**
+ * The camera, reading the invite QR that `gesto pair --qr` shows on the PC. Asks for the camera
+ * first; [onInviteScanned] gets the first Gesto invite it reads, [onDismiss] the close button.
+ */
 @Composable
 fun GestoQrScannerOverlay(
     onInviteScanned: (String) -> Unit,
@@ -69,19 +79,20 @@ fun GestoQrScannerOverlay(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val spacing = GestoTheme.spacing
     var hasPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
                 PackageManager.PERMISSION_GRANTED,
         )
     }
-    var error by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<Int?>(null) }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
         hasPermission = granted
         Log.i(TAG, "camera_permission_result granted=$granted")
-        if (!granted) error = "Camera permission denied. Allow camera access to scan Gesto terminal invites."
+        if (!granted) error = R.string.qr_permission_denied
     }
 
     LaunchedEffect(Unit) {
@@ -109,7 +120,7 @@ fun GestoQrScannerOverlay(
                 },
                 onError = { message ->
                     Log.w(TAG, "camera_start_failure reason=$message")
-                    error = message
+                    error = R.string.qr_camera_failed
                 },
             )
         } else {
@@ -126,58 +137,70 @@ fun GestoQrScannerOverlay(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .statusBarsPadding()
-                .padding(GestoTheme.spacing.xl)
+                .padding(spacing.xl)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = OVERLAY_ALPHA),
                 contentColor = MaterialTheme.colorScheme.onSurface,
-                shape = MaterialTheme.shapes.small,
+                shape = MaterialTheme.shapes.extraSmall,
+                border = BorderStroke(spacing.borderWidth, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.weight(1f),
             ) {
                 Row(
-                    modifier = Modifier.padding(
-                        horizontal = GestoTheme.spacing.xl,
-                        vertical = GestoTheme.spacing.lg,
-                    ),
+                    modifier = Modifier.padding(horizontal = spacing.xl, vertical = spacing.lg),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        Icons.Rounded.QrCodeScanner,
+                        GestoIcons.Qr,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(spacing.barIconSize),
                     )
-                    Text(
-                        "Scan Gesto invite",
-                        modifier = Modifier.padding(start = GestoTheme.spacing.lg),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleSmall,
-                    )
+                    Column(Modifier.padding(start = spacing.lg)) {
+                        Text(
+                            stringResource(R.string.add_scan_qr),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(
+                            stringResource(R.string.qr_hint, stringResource(R.string.qr_command)),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
-            IconButton(onClick = onDismiss) {
+            Spacer(Modifier.width(spacing.md))
+            GestoIconButton(onClick = onDismiss) {
                 Icon(
-                    Icons.Rounded.Close,
-                    contentDescription = "Close scanner",
+                    GestoIcons.Close,
+                    contentDescription = stringResource(R.string.qr_close),
                     tint = GestoOnVideoLetterbox,
+                    modifier = Modifier.size(spacing.barIconSize),
                 )
             }
         }
 
-        error?.let { message ->
+        // With the camera running, a failure shows over the preview; without it, in PermissionBody.
+        val shownError = error
+        if (hasPermission && shownError != null) {
             Surface(
                 color = MaterialTheme.colorScheme.errorContainer,
                 contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                shape = MaterialTheme.shapes.medium,
+                shape = MaterialTheme.shapes.extraSmall,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(GestoTheme.spacing.gutter),
+                    .navigationBarsPadding()
+                    .padding(spacing.gutter),
             ) {
                 Text(
-                    message,
-                    modifier = Modifier.padding(GestoTheme.spacing.xxl),
+                    stringResource(shownError),
+                    modifier = Modifier.padding(spacing.xxl),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -186,34 +209,37 @@ fun GestoQrScannerOverlay(
 }
 
 @Composable
-private fun PermissionBody(error: String?, onRetry: () -> Unit) {
+private fun PermissionBody(@StringRes error: Int?, onRetry: () -> Unit) {
+    val spacing = GestoTheme.spacing
     Column(
         Modifier
             .fillMaxSize()
-            .padding(GestoTheme.spacing.hero),
+            .padding(spacing.hero),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(
-            Icons.Rounded.QrCodeScanner,
+            GestoIcons.Qr,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(spacing.emptyStateIconSize),
         )
-        Spacer(Modifier.height(GestoTheme.spacing.xxl))
+        Spacer(Modifier.height(spacing.xxl))
         Text(
-            "Camera access is required for QR invites",
+            stringResource(R.string.qr_permission_title),
             color = GestoOnVideoLetterbox,
             style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center,
         )
+        Spacer(Modifier.height(spacing.xs))
         Text(
-            error ?: "Gesto uses the camera only to decode the terminal invite QR.",
+            stringResource(error ?: R.string.qr_permission_text),
             color = GestoOnVideoLetterboxMuted,
             style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(GestoTheme.spacing.gutter))
-        Button(onClick = onRetry) {
-            Text("Allow camera")
-        }
+        Spacer(Modifier.height(spacing.gutter))
+        GestoButton(stringResource(R.string.qr_allow_camera), onRetry)
     }
 }
 

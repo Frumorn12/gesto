@@ -1,7 +1,6 @@
 package it.frumorn.gesto
 
 import android.app.Application
-import android.os.Build
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
@@ -39,6 +38,12 @@ import it.frumorn.gesto.core.network.mergeSightings
 import it.frumorn.gesto.core.network.RequestMayHaveRunException
 import it.frumorn.gesto.core.network.GestoDiscovery
 import it.frumorn.gesto.core.network.GestoInvite
+import it.frumorn.gesto.core.network.PairingCancelledException
+import it.frumorn.gesto.core.network.identity
+import it.frumorn.gesto.core.pairing.AddPcFlow
+import it.frumorn.gesto.core.pairing.AddPcNext
+import it.frumorn.gesto.core.pairing.PinGenerator
+import it.frumorn.gesto.core.system.DeviceName
 import it.frumorn.gesto.core.screen.RemoteScreenSessionEvent
 import it.frumorn.gesto.core.screen.RemoteScreenSessionMachine
 import it.frumorn.gesto.core.session.HostPresenceTracker
@@ -54,6 +59,8 @@ import it.frumorn.gesto.ui.navigation.reachableScreen
 import it.frumorn.gesto.ui.theme.ThemeMode
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -121,6 +128,10 @@ data class GestoUiState(
     val connectedHost: TrustedHost? = null,
     val capabilities: CapabilitySummary = CapabilitySummary(),
     val pairingCode: String = "",
+    /** The PIN shown while the PC is asked to let this phone in; empty outside that step. */
+    val pairingPin: String = "",
+    /** A pairing (PIN or code) is waiting for the PC's answer. */
+    val pairingBusy: Boolean = false,
     val manualAddress: String = "",
     val manualPort: String = "47771",
     val status: String = "Ready",
@@ -183,6 +194,7 @@ class GestoViewModel(
         const val PRESENCE_LISTEN_MS = 1_200
         /** Rest between two scans when one ran long, so the radio is never kept busy back to back. */
         const val PRESENCE_MIN_GAP_MS = 500L
+        const val DEFAULT_PORT = 47771
     }
 
     private val discovery = GestoDiscovery(application)
@@ -227,6 +239,16 @@ class GestoViewModel(
     private var retryHostId: String? = null
     private val presenceTracker = HostPresenceTracker()
     private var presenceJob: Job? = null
+    /** When the PCs list stopped scanning; a longer pause makes its presence stale. */
+    private var presencePausedAtMs = 0L
+    /** The search step of Add a PC scans while it is on screen. */
+    private var addPcScanJob: Job? = null
+    private var lastAddPcScan: List<DiscoveredHost> = emptyList()
+    /** Id of the pairing (PIN or code) the app is still waiting for; 0 when none. */
+    private var livePairing = 0L
+    private var pairingCounter = 0L
+    /** The PC being paired was typed in by address: a failure goes back to that step. */
+    private var pairingFromAddress = false
 
     init {
         observeVideoSession()
@@ -475,7 +497,8 @@ class GestoViewModel(
             NoticeAction.OpenPcs -> go(Screen.Home)
             NoticeAction.UseCode -> {
                 go(Screen.AddPc)
-                setAddPcStep(AddPcStep.Code)
+                // The code needs the PC it was meant for; without one, the search.
+                setAddPcStep(if (_state.value.selectedHost != null) AddPcStep.Code else AddPcStep.Search)
             }
         }
     }
@@ -488,6 +511,7 @@ class GestoViewModel(
     fun go(requested: Screen) {
         val screen = reachableScreen(requested, connected = _state.value.connectedHost != null)
         if (screen != Screen.Launch) abandonLaunch()
+        if (screen != Screen.AddPc) abandonPairing()
         val wasCapturingExternalInput = shouldCaptureExternalInput(_state.value)
         val previous = _state.value.screen
         if (previous == Screen.Display && screen != Screen.Display) {
@@ -563,7 +587,12 @@ class GestoViewModel(
         _state.update { it.copy(quickMenuOpen = open && it.screen.isSession) }
     }
 
+    /**
+     * Moves Add a PC to [step]. Leaving the PIN (or the code while it is being checked) stops the
+     * pairing: its connection closes, so the PC withdraws its notification.
+     */
     fun setAddPcStep(step: AddPcStep) {
+        if (step != _state.value.addPcStep) abandonPairing()
         _state.update { it.copy(addPcStep = step, error = null) }
     }
 
@@ -581,28 +610,27 @@ class GestoViewModel(
                     "qr_invite_loaded host=${invite.hostName} endpoints=${invite.endpoints.joinToString { "${it.route}:${it.address}:${it.port}" }} route=${invite.route} policy=${invite.policy} publicPairingAllowed=${invite.publicPairingAllowed} expires=${invite.expiresAt}",
                 )
                 go(Screen.AddPc)
+                // An invite replaces whatever pairing was running, even on the code step itself.
+                abandonPairing()
+                pairingFromAddress = false
+                setAddPcStep(AddPcStep.Code)
                 _state.update {
                     it.copy(
                         selectedHost = invite.toDiscoveredHost(),
                         pairingCode = invite.pairingCode,
                         manualAddress = invite.address,
                         manualPort = invite.port.toString(),
-                        addPcStep = AddPcStep.Code,
                         status = "Loaded ${invite.route} invite for ${invite.hostName.ifBlank { invite.address }}",
                         error = null,
                     )
                 }
-                pairSelectedHost()
+                pairWithCode()
             }
             .onFailure { throwable ->
                 Log.w(TAG, "qr_invite_failed message=${throwable.message}", throwable)
                 go(Screen.AddPc)
-                _state.update {
-                    it.copy(
-                        addPcStep = AddPcStep.Search,
-                        error = throwable.message ?: "Could not parse Gesto invite",
-                    )
-                }
+                setAddPcStep(AddPcStep.Search)
+                emitNotice(Notice(UiText.Res(R.string.error_invite_invalid)))
             }
     }
 
@@ -816,110 +844,292 @@ class GestoViewModel(
         }
     }
 
-    fun startDiscovery() {
+    /** "Add a PC" on the PCs list: the search step, which scans the network while it is shown. */
+    fun startAddPc() {
+        abandonPairing()
+        pendingInvite = null
+        pairingFromAddress = false
+        lastAddPcScan = emptyList()
         go(Screen.AddPc)
         _state.update {
             it.copy(
                 addPcStep = AddPcStep.Search,
-                connectionState = it.stateDuringDiscovery(ConnectionState.Discovering),
-                status = "Scanning LAN...",
+                discoveredHosts = emptyList(),
+                selectedHost = null,
+                pairingCode = "",
+                pairingPin = "",
                 error = null,
             )
         }
-        viewModelScope.launch {
-            runCatching { discovery.discover() }
-                .onSuccess { hosts ->
-                    _state.update {
-                        it.copy(
-                            discoveredHosts = hosts,
-                            // A held session keeps its state; scanning never disconnects it.
-                            connectionState = it.stateDuringDiscovery(ConnectionState.Disconnected),
-                            status = if (hosts.isEmpty()) "No hosts discovered. Use manual connect." else "Found ${hosts.size} host(s).",
-                        )
-                    }
-                }
-                .onFailure { fail("Discovery failed", it, ErrorContext.Connecting, 47771) }
-        }
     }
 
-    fun selectHost(host: DiscoveredHost) {
-        go(Screen.AddPc)
-        _state.update { it.copy(selectedHost = host, addPcStep = AddPcStep.Code, pairingCode = "") }
-    }
-
-    fun useManualHost() {
-        val current = _state.value
-        val port = current.manualPort.toIntOrNull() ?: 47771
-        if (current.manualAddress.isBlank()) {
-            _state.update { it.copy(error = "Enter a host IP address first.") }
+    /**
+     * Scans the network every [PRESENCE_INTERVAL_MS] while [on]: the search step of Add a PC turns
+     * it on while it is on screen and the app is in the foreground, and off otherwise.
+     */
+    fun setAddPcScanning(on: Boolean) {
+        if (!on) {
+            addPcScanJob?.cancel()
+            addPcScanJob = null
             return
         }
-        selectHost(
-            DiscoveredHost(
-                hostName = current.manualAddress,
-                address = current.manualAddress,
-                port = port,
-                fingerprint = "",
-                inputSupported = false,
-                inputBackend = "manual",
-                captureSupported = false,
-                captureBackend = "manual",
-            )
-        )
+        if (addPcScanJob?.isActive == true) return
+        addPcScanJob = viewModelScope.launch {
+            runScans { found ->
+                val previous = lastAddPcScan
+                lastAddPcScan = found
+                _state.update { it.copy(discoveredHosts = AddPcFlow.searchResults(it.discoveredHosts, previous, found)) }
+            }
+        }
     }
 
-    fun pairSelectedHost() {
+    /** A PC found by the search: the PIN when its daemon can ask on the PC, else the code. */
+    fun selectHostForPairing(key: String) {
+        val host = _state.value.discoveredHosts.firstOrNull { it.identity == key } ?: return
+        pendingInvite = null
+        pairingFromAddress = false
+        Log.i(TAG, "add_pc_selected host=${host.hostName} approval=${host.approvalPairing}")
+        _state.update { it.copy(selectedHost = host, pairingCode = "") }
+        when (AddPcFlow.firstStepFor(host)) {
+            AddPcStep.Approval -> requestApprovalPairing()
+            else -> setAddPcStep(AddPcStep.Code)
+        }
+    }
+
+    /**
+     * Asks the selected PC to let this phone in: the phone shows a new PIN, the PC a notification with
+     * the same PIN. The answer opens the session; a refusal or silence goes back as [AddPcFlow] says.
+     */
+    fun requestApprovalPairing() {
+        val host = _state.value.selectedHost ?: return
+        abandonPairing()
+        val attempt = ++pairingCounter
+        livePairing = attempt
+        val pin = PinGenerator.newPin()
+        Log.i(TAG, "approval_pairing_request host=${host.hostName} address=${host.address}:${host.port}")
+        _state.update {
+            it.copy(
+                addPcStep = AddPcStep.Approval,
+                pairingPin = pin,
+                pairingBusy = true,
+                // A session that is held stays as it is: the wait does not touch its channel.
+                connectionState = it.stateDuringDiscovery(ConnectionState.Pairing),
+                error = null,
+            )
+        }
+        // Undispatched: the client registers the attempt before this returns, so a Cancel that
+        // follows always reaches it.
+        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            val result = runCatching {
+                client.pairWithApproval(
+                    address = host.address,
+                    port = host.port,
+                    deviceName = deviceName(),
+                    pin = pin,
+                    expectedFingerprint = host.fingerprint.ifBlank { null },
+                )
+            }
+            if (result.exceptionOrNull() is CancellationException) return@launch
+            when (val next = AddPcFlow.afterApproval(result, host.port)) {
+                AddPcNext.Paired -> result.getOrNull()?.let { (paired, capabilities) -> onPaired(paired, capabilities, attempt) }
+                is AddPcNext.Step -> onApprovalFailed(attempt, result.exceptionOrNull(), next)
+            }
+        }
+    }
+
+    /** Cancel on the PIN step: back to the search, and the PC withdraws its notification. */
+    fun cancelApproval() = setAddPcStep(AddPcStep.Search)
+
+    private fun onApprovalFailed(attempt: Long, error: Throwable?, next: AddPcNext.Step) {
+        if (livePairing != attempt) {
+            Log.i(TAG, "approval_pairing_dropped stale=true reason=${error?.javaClass?.simpleName}")
+            return
+        }
+        livePairing = 0L
+        Log.w(TAG, "approval_pairing_failed next=${next.step}", error)
+        // A typed-in address that failed goes back to the address, so it can be corrected.
+        val step = if (next.step == AddPcStep.Search && pairingFromAddress) AddPcStep.Address else next.step
+        _state.update {
+            it.copy(
+                addPcStep = step,
+                pairingPin = "",
+                pairingBusy = false,
+                pairingCode = "",
+                connectionState = it.stateDuringDiscovery(ConnectionState.Disconnected),
+            )
+        }
+        releaseStrayChannel()
+        next.notice?.let { emitNotice(Notice(it, next.action)) }
+    }
+
+    /** The QR step: the camera, reading the invite `gesto pair --qr` shows on the PC. */
+    fun openQr() = setAddPcStep(AddPcStep.Qr)
+
+    fun openAddress() = setAddPcStep(AddPcStep.Address)
+
+    /** "Continue" on the address step: the PC at that address is asked with a PIN, an old one falls back to the code. */
+    fun useAddress() {
+        val current = _state.value
+        val address = current.manualAddress.trim()
+        if (address.isEmpty()) return
+        val port = current.manualPort.toIntOrNull()?.takeIf { it in 1..65535 } ?: DEFAULT_PORT
+        pendingInvite = null
+        pairingFromAddress = true
+        _state.update {
+            it.copy(
+                selectedHost = DiscoveredHost(
+                    hostName = address,
+                    address = address,
+                    port = port,
+                    fingerprint = "",
+                    inputSupported = false,
+                    inputBackend = "manual",
+                    captureSupported = false,
+                    captureBackend = "manual",
+                    // Not known for a typed address: asked first, the code follows if the daemon is old.
+                    approvalPairing = true,
+                ),
+                pairingCode = "",
+            )
+        }
+        requestApprovalPairing()
+    }
+
+    /** "Add the PC" on the code step (also run by a scanned invite, which carries its code). */
+    fun pairWithCode() {
         val current = _state.value
         val host = current.selectedHost ?: return
-        if (current.pairingCode.length != 6) {
-            _state.update { it.copy(error = "Enter the 6 digit pairing code shown on the Linux host.") }
-            return
-        }
+        if (current.pairingCode.length != 6 || current.pairingBusy) return
+        abandonPairing()
+        val attempt = ++pairingCounter
+        livePairing = attempt
         val invite = pendingInvite?.takeIf { it.pairingCode == current.pairingCode }
         val candidates = invite?.toCandidateHosts() ?: listOf(host)
         Log.i(
             TAG,
             "connection_state=pairing host=${host.hostName} candidates=${candidates.joinToString { "${it.address}:${it.port}" }}",
         )
-        _state.update { it.copy(connectionState = ConnectionState.Pairing, status = "Pairing with ${host.hostName}...", error = null) }
-        viewModelScope.launch {
-            val deviceName = "Gesto Android ${Build.MODEL}".take(80)
+        _state.update {
+            it.copy(
+                pairingBusy = true,
+                connectionState = it.stateDuringDiscovery(ConnectionState.Pairing),
+                status = "Pairing with ${host.hostName}...",
+                error = null,
+            )
+        }
+        viewModelScope.launch(start = CoroutineStart.UNDISPATCHED) {
             pairWithCandidates(
                 candidates = candidates,
-                deviceName = deviceName,
+                deviceName = deviceName(),
                 pairingCode = current.pairingCode,
+                stillWanted = { livePairing == attempt },
             ).onSuccess { (paired, capabilities) ->
-                Log.i(TAG, "connection_state=connected paired_host=${paired.hostName} input_backend=${capabilities.inputBackend}")
-                pendingInvite = null
-                // Pairing the same PC again keeps the name the user gave it.
-                val previousName = store.load().firstOrNull { it.fingerprint == paired.fingerprint }?.displayName
-                val trusted = paired.copy(displayName = previousName)
-                store.upsert(trusted)
-                retryHostId = trusted.id
-                savedStateHandle["connectedHostId"] = trusted.id
+                onPaired(paired, capabilities, attempt)
+            }.onFailure { error ->
+                if (error is CancellationException || livePairing != attempt) return@onFailure
+                livePairing = 0L
+                Log.w(TAG, "code_pairing_failed", error)
+                // The same invite may be scanned again to retry.
+                handledInvitePayload = null
                 _state.update {
                     it.copy(
-                        trustedHosts = store.load(),
-                        connectedHost = trusted,
-                        capabilities = capabilities,
-                        connectionState = ConnectionState.Connected,
-                        status = "Connected to ${trusted.hostName}",
-                        error = null,
+                        pairingBusy = false,
+                        pairingCode = "",
+                        connectionState = it.stateDuringDiscovery(ConnectionState.Disconnected),
+                        status = "Ready",
                     )
                 }
-                go(Screen.Touchpad)
-            }.onFailure { fail("Pairing failed", it, ErrorContext.Pairing, host.port) }
+                releaseStrayChannel()
+                emitNotice(Notice(ErrorTranslator.translate(error, ErrorContext.Pairing, host.port)))
+            }
         }
     }
+
+    /**
+     * The PC let this phone in: it is stored (keeping the name the user gave it, if it was paired
+     * before) and its session opens on the Touchpad. An answer that arrives just after Cancel still
+     * counts: the PC has already added the phone and the client has already switched to its channel.
+     */
+    private fun onPaired(paired: TrustedHost, capabilities: CapabilitySummary, attempt: Long) {
+        if (livePairing != attempt) {
+            Log.i(TAG, "pairing_answered_after_cancel")
+            // A newer attempt is waiting for nothing now.
+            if (livePairing != 0L) abandonPairing()
+        }
+        livePairing = 0L
+        Log.i(TAG, "connection_state=connected paired_host=${paired.hostName} input_backend=${capabilities.inputBackend}")
+        pendingInvite = null
+        val previous = _state.value.connectedHost
+        if (previous != null && previous.fingerprint != paired.fingerprint) {
+            // The session with the other PC lost its channel to this one.
+            reconnectJob?.cancel()
+            clearQueuedInput()
+        }
+        val previousName = store.load().firstOrNull { it.fingerprint == paired.fingerprint }?.displayName
+        val trusted = paired.copy(displayName = previousName)
+        store.upsert(trusted)
+        retryHostId = trusted.id
+        savedStateHandle["connectedHostId"] = trusted.id
+        _state.update {
+            it.copy(
+                trustedHosts = store.load(),
+                connectedHost = trusted,
+                capabilities = capabilities,
+                connectionState = ConnectionState.Connected,
+                status = "Connected to ${trusted.hostName}",
+                error = null,
+                reconnecting = false,
+                pairingBusy = false,
+                pairingPin = "",
+                pairingCode = "",
+                selectedHost = null,
+                addPcStep = AddPcStep.Search,
+            )
+        }
+        go(Screen.Touchpad)
+        emitNotice(Notice(UiText.Res(R.string.notice_pc_added, listOf(trusted.label))))
+    }
+
+    /**
+     * Stops waiting for the pairing in flight, if any. Its connection is closed, so the daemon
+     * withdraws the notification and stores nothing.
+     */
+    private fun abandonPairing() {
+        if (livePairing == 0L) return
+        Log.i(TAG, "pairing_abandoned")
+        livePairing = 0L
+        client.cancelPairing()
+        _state.update {
+            it.copy(
+                pairingBusy = false,
+                pairingPin = "",
+                connectionState = if (it.connectionState == ConnectionState.Pairing) ConnectionState.Disconnected else it.connectionState,
+            )
+        }
+        releaseStrayChannel()
+    }
+
+    /**
+     * Closes a channel nobody owns: a launch connection that arrived late while a pairing was
+     * running is kept for it, and must go once the pairing failed or was abandoned.
+     */
+    private fun releaseStrayChannel() {
+        val s = _state.value
+        if (s.connectedHost == null && liveLaunch == 0L && livePairing == 0L) client.close()
+    }
+
+    private fun deviceName(): String = DeviceName.get(getApplication())
 
     private suspend fun pairWithCandidates(
         candidates: List<DiscoveredHost>,
         deviceName: String,
         pairingCode: String,
+        stillWanted: () -> Boolean,
     ): Result<Pair<TrustedHost, CapabilitySummary>> {
         var lastFailure: Throwable? = null
         var sawPolicyRejection = false
         for ((index, candidate) in candidates.distinctBy { "${it.address}:${it.port}" }.withIndex()) {
+            if (!stillWanted()) return Result.failure(PairingCancelledException())
             Log.i(
                 TAG,
                 "qr_invite_connect_attempt index=$index address=${candidate.address}:${candidate.port} backend=${candidate.inputBackend}",
@@ -935,6 +1145,7 @@ class GestoViewModel(
             }
             if (result.isSuccess) return result
             lastFailure = result.exceptionOrNull()
+            if (lastFailure is CancellationException || lastFailure is PairingCancelledException) return result
             val msg = lastFailure?.message.orEmpty()
             if (msg.contains("public_pairing_denied", ignoreCase = true) ||
                 msg.contains("blocks pairing from public networks", ignoreCase = true)
@@ -961,7 +1172,7 @@ class GestoViewModel(
                     code = "public_pairing_denied",
                     message = "Remote pairing blocked by host policy. " +
                         "The host admin must set allow_public_pairing=true or require_private_lan=false " +
-                        "in ~/.config/waypad-daemon/config.json, then restart the daemon.",
+                        "in ~/.config/gesto/config.json, then restart the daemon.",
                     retryable = false,
                 ),
             )
@@ -1070,7 +1281,9 @@ class GestoViewModel(
         val host = store.load().find { it.id == id } ?: return
         if (host.macAddresses.isEmpty()) return
         viewModelScope.launch {
-            val targets = runCatching { discovery.broadcastAddresses() }.getOrDefault(listOf("255.255.255.255"))
+            val targets = withContext(Dispatchers.IO) {
+                runCatching { discovery.broadcastAddresses() }.getOrDefault(listOf("255.255.255.255"))
+            }
             val sent = host.macAddresses.count { mac ->
                 runCatching { WakeOnLan.send(mac, broadcast = targets) }
                     .onFailure { if (it is CancellationException) throw it else Log.w(TAG, "wake_failed", it) }
@@ -1092,15 +1305,30 @@ class GestoViewModel(
      */
     fun setPresenceScanning(on: Boolean) {
         if (!on) {
+            if (presenceJob?.isActive == true) presencePausedAtMs = System.currentTimeMillis()
             presenceJob?.cancel()
             presenceJob = null
             return
         }
         if (presenceJob?.isActive == true) return
-        presenceJob = viewModelScope.launch { runPresenceScans() }
+        // After a pause longer than a scan, what the cards said may no longer be true: start over
+        // ("Looking...") rather than show a PC as on for the scans it takes to notice it is off.
+        if (presencePausedAtMs != 0L && System.currentTimeMillis() - presencePausedAtMs > PRESENCE_INTERVAL_MS) {
+            presenceTracker.reset()
+            _state.update { it.copy(presence = presenceTracker.presence(it.trustedHosts)) }
+        }
+        presenceJob = viewModelScope.launch {
+            runScans { found ->
+                val hosts = _state.value.trustedHosts
+                val seen = found.mapNotNullTo(HashSet()) { host -> host.fingerprint.takeIf { it.isNotBlank() } }
+                val presence = presenceTracker.onScan(seen, hosts)
+                _state.update { it.copy(presence = presence, scannedHosts = mergeSightings(it.scannedHosts, found)) }
+            }
+        }
     }
 
-    private suspend fun runPresenceScans() {
+    /** Scans the network every [PRESENCE_INTERVAL_MS] until cancelled, handing each result to [onScan]. */
+    private suspend fun runScans(onScan: (List<DiscoveredHost>) -> Unit) {
         while (true) {
             val startedAt = System.nanoTime()
             val found = try {
@@ -1109,14 +1337,11 @@ class GestoViewModel(
                 throw e
             } catch (e: Exception) {
                 // No network at all: nothing answered, which is what the count of misses is for.
-                Log.d(TAG, "presence_scan_failed ${e.message}")
+                Log.d(TAG, "scan_failed ${e.message}")
                 emptyList()
             }
             currentCoroutineContext().ensureActive()
-            val hosts = _state.value.trustedHosts
-            val seen = found.mapNotNullTo(HashSet()) { host -> host.fingerprint.takeIf { it.isNotBlank() } }
-            val presence = presenceTracker.onScan(seen, hosts)
-            _state.update { it.copy(presence = presence, scannedHosts = mergeSightings(it.scannedHosts, found)) }
+            onScan(found)
             val elapsed = (System.nanoTime() - startedAt) / 1_000_000
             delay((PRESENCE_INTERVAL_MS - elapsed).coerceAtLeast(PRESENCE_MIN_GAP_MS))
         }
@@ -1625,11 +1850,6 @@ class GestoViewModel(
         _notices.trySend(notice)
     }
 
-    private fun resolve(text: UiText): String = when (text) {
-        is UiText.Raw -> text.text
-        is UiText.Res -> getApplication<Application>().getString(text.id, *text.args.toTypedArray())
-    }
-
     /**
      * Re-establishes the session after a transport failure, silently, within the policy's budget.
      * Concurrent callers share one attempt. Returns true when the session is back.
@@ -1732,17 +1952,6 @@ class GestoViewModel(
                 reconnectCurrentHost()
             }
         }
-    }
-
-    /**
-     * Pairing and first-connection failures only. With a host already connected a failure is never
-     * allowed to park the session in [ConnectionState.Error]: the user gets a notice instead.
-     */
-    private fun fail(prefix: String, throwable: Throwable, context: ErrorContext, port: Int) {
-        Log.e(TAG, "connection_state=error prefix=$prefix", throwable)
-        val text = ErrorTranslator.translate(throwable, context, port)
-        _state.update { it.afterFailedAttempt(prefix, resolve(text)) }
-        emitNotice(Notice(text))
     }
 
     private fun enqueueInput(command: RemoteInputCommand) {
@@ -2022,6 +2231,8 @@ class GestoViewModel(
         liveLaunch = 0L
         launchTimeoutJob?.cancel()
         presenceJob?.cancel()
+        addPcScanJob?.cancel()
+        livePairing = 0L
         client.shutdown()
         super.onCleared()
     }
@@ -2141,18 +2352,6 @@ internal fun Throwable.isTransportFailure(): Boolean {
         "socket closed" in text ||
         "not connected" in text
 }
-
-/**
- * State after a connect/pair/discover attempt failed while a session is still held: the attempt
- * never replaced the live channel, so the session goes back to Connected. Without a held session
- * the Error state is kept.
- */
-internal fun GestoUiState.afterFailedAttempt(prefix: String, error: String): GestoUiState =
-    if (connectedHost != null) {
-        copy(connectionState = ConnectionState.Connected, status = "Ready")
-    } else {
-        copy(connectionState = ConnectionState.Error, status = prefix, error = error)
-    }
 
 /** Scanning for hosts never changes the state of a session that is held: only an idle app moves. */
 internal fun GestoUiState.stateDuringDiscovery(idle: ConnectionState): ConnectionState =

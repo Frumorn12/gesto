@@ -3,6 +3,7 @@ package it.frumorn.gesto.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
+import it.frumorn.gesto.AddPcStep
 import it.frumorn.gesto.R
 import it.frumorn.gesto.Screen
 import it.frumorn.gesto.GestoUiState
@@ -12,22 +13,22 @@ import it.frumorn.gesto.core.model.CapabilitySummary
 import it.frumorn.gesto.core.model.ConnectionState
 import it.frumorn.gesto.core.model.DiscoveredHost
 import it.frumorn.gesto.core.model.label
+import it.frumorn.gesto.core.network.identity
 import it.frumorn.gesto.core.session.Presence
 import it.frumorn.gesto.core.session.isLocalNetworkAddress
 import it.frumorn.gesto.sessionMode
+import it.frumorn.gesto.ui.state.AddPcActions
+import it.frumorn.gesto.ui.state.AddPcUiState
 import it.frumorn.gesto.ui.state.ControlsActions
 import it.frumorn.gesto.ui.state.ControlsUiState
 import it.frumorn.gesto.ui.state.DiagnosticsActions
 import it.frumorn.gesto.ui.state.DiagnosticsUiState
-import it.frumorn.gesto.ui.state.DiscoveryActions
-import it.frumorn.gesto.ui.state.DiscoveryUiState
 import it.frumorn.gesto.ui.state.HomeActions
 import it.frumorn.gesto.ui.state.HomeUiState
 import it.frumorn.gesto.ui.state.KeyboardActions
 import it.frumorn.gesto.ui.state.LaunchActions
 import it.frumorn.gesto.ui.state.LaunchUiState
-import it.frumorn.gesto.ui.state.PairingActions
-import it.frumorn.gesto.ui.state.PairingUiState
+import it.frumorn.gesto.ui.state.FoundPcState
 import it.frumorn.gesto.ui.state.PcCardState
 import it.frumorn.gesto.ui.state.RemoteDisplayActions
 import it.frumorn.gesto.ui.state.RemoteDisplayUiState
@@ -53,8 +54,7 @@ class GestoActions(
     val onBack: () -> Boolean = { true },
     val launch: LaunchActions = LaunchActions(),
     val session: SessionActions = SessionActions(),
-    val discovery: DiscoveryActions = DiscoveryActions(),
-    val pairing: PairingActions = PairingActions(),
+    val addPc: AddPcActions = AddPcActions(),
     val remotePad: RemotePadActions = RemotePadActions(),
     val remoteDisplay: RemoteDisplayActions = RemoteDisplayActions(),
     val keyboard: KeyboardActions = KeyboardActions(),
@@ -80,17 +80,18 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
             onSetQuickMenuOpen = viewModel::setQuickMenuOpen,
             onDisconnect = viewModel::disconnect,
         ),
-        discovery = DiscoveryActions(
-            onScanLan = viewModel::startDiscovery,
-            onSelectHost = viewModel::selectHost,
-            onApplyInvite = viewModel::applyInvite,
-            onManualAddressChange = viewModel::setManualAddress,
-            onManualPortChange = viewModel::setManualPort,
-            onUseManualHost = viewModel::useManualHost,
-        ),
-        pairing = PairingActions(
-            onPairingCodeChange = viewModel::setPairingCode,
-            onPair = viewModel::pairSelectedHost,
+        addPc = AddPcActions(
+            onSelectPc = viewModel::selectHostForPairing,
+            onOpenQr = viewModel::openQr,
+            onOpenAddress = viewModel::openAddress,
+            onCancelApproval = viewModel::cancelApproval,
+            onCodeChange = viewModel::setPairingCode,
+            onPairWithCode = viewModel::pairWithCode,
+            onAddressChange = viewModel::setManualAddress,
+            onPortChange = viewModel::setManualPort,
+            onUseAddress = viewModel::useAddress,
+            onInviteScanned = viewModel::applyInvite,
+            onCloseQr = { viewModel.setAddPcStep(AddPcStep.Search) },
         ),
         remotePad = RemotePadActions(
             onPrepareInput = viewModel::prepareInput,
@@ -151,8 +152,7 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
             onWake = viewModel::wake,
             onRename = viewModel::rename,
             onForget = viewModel::forget,
-            // Until the new Add a PC flow lands, this opens the old search screen.
-            onAddPc = viewModel::startDiscovery,
+            onAddPc = viewModel::startAddPc,
             onOpenSettings = { viewModel.go(Screen.Settings) },
         ),
         diagnostics = DiagnosticsActions(
@@ -177,16 +177,18 @@ internal fun GestoUiState.toLaunchState(): LaunchUiState = LaunchUiState(
     sameNetwork = launchHost?.address?.let(::isLocalNetworkAddress) ?: false,
 )
 
-internal fun GestoUiState.toDiscoveryState(): DiscoveryUiState = DiscoveryUiState(
-    discoveredHosts = discoveredHosts,
-    manualAddress = manualAddress,
-    manualPort = manualPort,
-)
-
-internal fun GestoUiState.toPairingState(): PairingUiState = PairingUiState(
-    hostName = selectedHost?.hostName,
-    fingerprint = selectedHost?.fingerprint,
-    pairingCode = pairingCode,
+/** Add a PC. A found PC already paired shows the name the user gave it. */
+internal fun GestoUiState.toAddPcState(): AddPcUiState = AddPcUiState(
+    step = addPcStep,
+    found = discoveredHosts.map { host ->
+        val paired = trustedHosts.firstOrNull { host.fingerprint.isNotBlank() && it.fingerprint == host.fingerprint }
+        FoundPcState(key = host.identity, name = paired?.label ?: host.hostName, alreadyAdded = paired != null)
+    },
+    pin = pairingPin,
+    code = pairingCode,
+    busy = pairingBusy,
+    address = manualAddress,
+    port = manualPort,
 )
 
 internal fun GestoUiState.toRemotePadState(): RemotePadUiState = RemotePadUiState(

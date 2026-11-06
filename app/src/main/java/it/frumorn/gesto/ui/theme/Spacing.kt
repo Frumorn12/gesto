@@ -86,6 +86,24 @@ data class GestoSpacing(
 
     /** The Gesto mark on the empty PCs list. */
     val emptyMarkSize: Dp = 72.dp
+
+    /** The searching squares of Add a PC, and the square at their centre. */
+    val radarSize: Dp = 150.dp
+    val radarCoreSize: Dp = 26.dp
+
+    /** The tinted square holding the icon of a found PC. */
+    val foundIconBox: Dp = 40.dp
+
+    /** One box of the PIN the PC shows. */
+    val pinBoxWidth: Dp = 52.dp
+    val pinBoxHeight: Dp = 64.dp
+
+    /** One bar of the step indicator of Add a PC. */
+    val stepBarWidth: Dp = 22.dp
+    val stepBarHeight: Dp = 3.dp
+
+    /** Room the page bar keeps opposite the back arrow, so its title stays centred. */
+    val barSideSlot: Dp = 48.dp
 }
 
 val LocalGestoSpacing = staticCompositionLocalOf { GestoSpacing() }

@@ -3,6 +3,7 @@ package it.frumorn.gesto.core.storage
 import android.content.Context
 import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
+import android.util.Log
 import android.security.keystore.KeyProperties
 import it.frumorn.gesto.core.model.TrustedHost
 import java.security.KeyStore
@@ -12,14 +13,22 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 class TrustedHostStore(context: Context) {
+    private companion object {
+        const val TAG = "TrustedHostStore"
+    }
+
     private val prefs: SharedPreferences =
         context.getSharedPreferences("waypad_secure", Context.MODE_PRIVATE)
     private val box = AndroidSecretBox()
 
+    /** The paired PCs; an unreadable store (key lost, data damaged) reads as none, never as a crash. */
     fun load(): List<TrustedHost> {
         val encrypted = prefs.getString("trusted_hosts", null) ?: return emptyList()
-        val raw = runCatching { box.decrypt(encrypted) }.getOrElse { return emptyList() }
-        return TrustedHostCodec.decode(raw)
+        return runCatching { TrustedHostCodec.decode(box.decrypt(encrypted)) }
+            .getOrElse { error ->
+                Log.w(TAG, "trusted_hosts_unreadable ${error.javaClass.simpleName}")
+                emptyList()
+            }
     }
 
     fun save(hosts: List<TrustedHost>) {

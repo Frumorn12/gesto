@@ -22,12 +22,15 @@ private val ACCEPTED_SERVICES = setOf("gesto", "dev.waypad.daemon")
  */
 val DISCOVERY_PROBES = listOf("GESTO_DISCOVER_V1", "WAYPAD_DISCOVER_V1")
 
+/** What tells one PC from another in discovery replies: its fingerprint, or address and port without one. */
+val DiscoveredHost.identity: String
+    get() = fingerprint.ifBlank { "$address:$port" }
+
 /**
  * One entry per PC: a daemon answers each probe, and may answer on more than one address. PCs are
- * told apart by fingerprint, or by address and port when a reply has none; the first reply wins.
+ * told apart by [identity]; the first reply wins.
  */
-fun dedupeDiscoveredHosts(hosts: List<DiscoveredHost>): List<DiscoveredHost> =
-    hosts.distinctBy { host -> host.fingerprint.ifBlank { "${host.address}:${host.port}" } }
+fun dedupeDiscoveredHosts(hosts: List<DiscoveredHost>): List<DiscoveredHost> = hosts.distinctBy { it.identity }
 
 /**
  * The last reply of every PC seen so far: [found] (the latest scan) wins over [previous], and a PC

@@ -3,6 +3,10 @@ package it.frumorn.gesto.ui
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -25,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -42,11 +47,11 @@ import it.frumorn.gesto.isSession
 import it.frumorn.gesto.ui.components.GestoPageBar
 import it.frumorn.gesto.ui.navigation.ScreensCapturingExternalPointer
 import it.frumorn.gesto.ui.screens.ControlsScreen
-import it.frumorn.gesto.ui.screens.DiscoveryScreen
+import it.frumorn.gesto.ui.screens.AddPcScreen
+import it.frumorn.gesto.ui.screens.addPcTitle
 import it.frumorn.gesto.ui.screens.HomeScreen
 import it.frumorn.gesto.ui.screens.KeyboardScreen
 import it.frumorn.gesto.ui.screens.LaunchScreen
-import it.frumorn.gesto.ui.screens.PairingScreen
 import it.frumorn.gesto.ui.screens.RemoteDisplayScreen
 import it.frumorn.gesto.ui.screens.RemoteDisplayVideoSurface
 import it.frumorn.gesto.ui.screens.RemotePadScreen
@@ -95,6 +100,12 @@ fun GestoApp(viewModel: GestoViewModel) {
     LifecycleStartEffect(viewModel, homeVisible) {
         viewModel.setPresenceScanning(homeVisible)
         onStopOrDispose { viewModel.setPresenceScanning(false) }
+    }
+    // The search step of Add a PC scans the same way, only while it is the step shown.
+    val searching = state.screen == Screen.AddPc && state.addPcStep == AddPcStep.Search
+    LifecycleStartEffect(viewModel, searching) {
+        viewModel.setAddPcScanning(searching)
+        onStopOrDispose { viewModel.setAddPcScanning(false) }
     }
     PcShortcutsEffect(state.trustedHosts)
     val actions = rememberGestoActions(viewModel)
@@ -228,47 +239,57 @@ private fun SessionPage(
 @Composable
 private fun PlainPage(page: Screen, state: GestoUiState, actions: GestoActions) {
     val back: () -> Unit = { actions.onBack() }
-    Scaffold(
-        // Transparent so the Box background shows through; contentColorFor(Transparent) is
-        // Unspecified, so the content colour is provided explicitly.
-        containerColor = Color.Transparent,
-        contentColor = MaterialTheme.colorScheme.onBackground,
-        topBar = {
-            when (page) {
-                Screen.Launch -> Unit
-                Screen.Home -> GestoPageBar(onOpenSettings = actions.onOpenSettings, error = state.error)
-                else -> GestoPageBar(onBack = back, error = state.error)
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            // Transparent so the Box background shows through; contentColorFor(Transparent) is
+            // Unspecified, so the content colour is provided explicitly.
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+            topBar = {
+                when (page) {
+                    Screen.Launch -> Unit
+                    Screen.Home -> GestoPageBar(onOpenSettings = actions.onOpenSettings, error = state.error)
+                    Screen.AddPc -> GestoPageBar(onBack = back, title = stringResource(addPcTitle(state.addPcStep)))
+                    else -> GestoPageBar(onBack = back, error = state.error)
+                }
+            },
+        ) { padding ->
+            Box(
+                Modifier
+                    .padding(padding)
+                    .consumeWindowInsets(padding)
+                    .imePadding()
+                    .padding(horizontal = GestoTheme.spacing.gutter)
+                    .fillMaxSize()
+            ) {
+                when (page) {
+                    Screen.Launch -> {
+                        val launch = state.toLaunchState()
+                        val shown = remember { Last(launch) }
+                        if (launch.hostName.isNotEmpty()) shown.value = launch
+                        LaunchScreen(shown.value, actions.launch)
+                    }
+                    Screen.Home -> HomeScreen(state.toHomeState(), actions.home)
+                    Screen.AddPc -> AddPcScreen(state.toAddPcState(), actions.addPc)
+                    Screen.Settings -> SettingsScreen(state.toSettingsState(), actions.settings)
+                    Screen.Diagnostics -> TroubleshootingScreen(state.toDiagnosticsState(), actions.diagnostics)
+                    // Advanced has no screen yet and no entry point leads to it.
+                    Screen.Advanced -> Unit
+                    Screen.Touchpad, Screen.Display, Screen.Commands -> Unit
+                }
             }
-        },
-    ) { padding ->
-        Box(
-            Modifier
-                .padding(padding)
-                .consumeWindowInsets(padding)
-                .imePadding()
-                .padding(horizontal = GestoTheme.spacing.gutter)
-                .fillMaxSize()
-        ) {
-            when (page) {
-                Screen.Launch -> {
-                    val launch = state.toLaunchState()
-                    val shown = remember { Last(launch) }
-                    if (launch.hostName.isNotEmpty()) shown.value = launch
-                    LaunchScreen(shown.value, actions.launch)
-                }
-                Screen.Home -> HomeScreen(state.toHomeState(), actions.home)
-                // Add a PC still shows the old screens until its redesign lands.
-                Screen.AddPc -> when (state.addPcStep) {
-                    AddPcStep.Code -> PairingScreen(state.toPairingState(), actions.pairing)
-                    // Approval has no screen yet: nothing leads there before the PIN flow exists.
-                    AddPcStep.Search, AddPcStep.Approval, AddPcStep.Address, AddPcStep.Qr ->
-                        DiscoveryScreen(state.toDiscoveryState(), actions.discovery)
-                }
-                Screen.Settings -> SettingsScreen(state.toSettingsState(), actions.settings)
-                Screen.Diagnostics -> TroubleshootingScreen(state.toDiagnosticsState(), actions.diagnostics)
-                // Advanced has no screen yet and no entry point leads to it.
-                Screen.Advanced -> Unit
-                Screen.Touchpad, Screen.Display, Screen.Commands -> Unit
+        }
+        // The camera covers the whole page, bars included; back or its close button return to the search.
+        if (page == Screen.AddPc) {
+            AnimatedVisibility(
+                visible = state.addPcStep == AddPcStep.Qr,
+                enter = fadeIn(tween(GestoMotion.ENTER_MS, easing = GestoMotion.Enter)),
+                exit = fadeOut(tween(GestoMotion.EXIT_MS, easing = GestoMotion.Exit)),
+            ) {
+                GestoQrScannerOverlay(
+                    onInviteScanned = actions.addPc.onInviteScanned,
+                    onDismiss = actions.addPc.onCloseQr,
+                )
             }
         }
     }
@@ -293,6 +314,17 @@ private fun GestoAppShellPreviewLight() {
                 connectedHost = previewHost,
                 latencyMs = 4,
             ),
+            actions = GestoActions(),
+        )
+    }
+}
+
+@Preview(name = "Shell - add a PC - dark", widthDp = 412, heightDp = 900)
+@Composable
+private fun GestoAppShellPreviewAddPc() {
+    GestoTheme(mode = ThemeMode.Dark) {
+        GestoAppShell(
+            state = GestoUiState(screen = Screen.AddPc, addPcStep = AddPcStep.Approval, pairingPin = "4821"),
             actions = GestoActions(),
         )
     }

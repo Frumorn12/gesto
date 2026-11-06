@@ -4,7 +4,6 @@ import androidx.compose.runtime.Immutable
 import it.frumorn.gesto.SessionMode
 import it.frumorn.gesto.core.input.RemoteGestureMode
 import it.frumorn.gesto.core.model.ButtonState
-import it.frumorn.gesto.core.model.DiscoveredHost
 import it.frumorn.gesto.core.model.PointerButton
 import it.frumorn.gesto.core.model.StreamProfile
 
@@ -33,19 +32,22 @@ data class LaunchActions(
 )
 
 @Immutable
-data class DiscoveryActions(
-    val onScanLan: () -> Unit = {},
-    val onSelectHost: (DiscoveredHost) -> Unit = {},
-    val onApplyInvite: (String) -> Unit = {},
-    val onManualAddressChange: (String) -> Unit = {},
-    val onManualPortChange: (String) -> Unit = {},
-    val onUseManualHost: () -> Unit = {},
-)
-
-@Immutable
-data class PairingActions(
-    val onPairingCodeChange: (String) -> Unit = {},
-    val onPair: () -> Unit = {},
+data class AddPcActions(
+    /** A found PC, by [FoundPcState.key]. */
+    val onSelectPc: (String) -> Unit = {},
+    val onOpenQr: () -> Unit = {},
+    val onOpenAddress: () -> Unit = {},
+    /** Cancel on the PIN step: back to the search. */
+    val onCancelApproval: () -> Unit = {},
+    val onCodeChange: (String) -> Unit = {},
+    val onPairWithCode: () -> Unit = {},
+    val onAddressChange: (String) -> Unit = {},
+    val onPortChange: (String) -> Unit = {},
+    val onUseAddress: () -> Unit = {},
+    /** The camera read an invite. */
+    val onInviteScanned: (String) -> Unit = {},
+    /** The camera's close button: back to the search. */
+    val onCloseQr: () -> Unit = {},
 )
 
 @Immutable

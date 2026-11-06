@@ -4,25 +4,15 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Computer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import it.frumorn.gesto.core.model.DiscoveredHost
 import it.frumorn.gesto.ui.theme.GestoPreviewSurface
 import it.frumorn.gesto.ui.theme.GestoTheme
 
@@ -59,52 +49,6 @@ fun GestoCard(
     }
 }
 
-/** A host found on the LAN (or built from an invite), tappable to start pairing. */
-@Composable
-fun DiscoveredHostCard(
-    host: DiscoveredHost,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    GestoCard(modifier = modifier, onClick = onClick) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Rounded.Computer,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.width(GestoTheme.spacing.xl))
-            Column(Modifier.weight(1f)) {
-                Text(host.hostName, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "${host.address}:${host.port}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    shortFingerprint(host.fingerprint),
-                    style = GestoTheme.accentTypography.fingerprint,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            StatusPill(
-                when {
-                    host.inputSupported && host.captureSupported -> "Control + screen"
-                    host.inputSupported -> host.inputBackend
-                    host.captureSupported -> host.captureBackend
-                    else -> "Limited"
-                }
-            )
-        }
-    }
-}
-
-/** Collapses a long SHA fingerprint so it stays on one line. */
-fun shortFingerprint(value: String): String =
-    if (value.length > 31) value.take(19) + "..." + value.takeLast(9) else value
-
 @Preview(name = "Cards - dark")
 @Composable
 private fun GestoCardsPreviewDark() = GestoPreviewSurface(darkTheme = true) { CardsPreviewBody() }
@@ -116,18 +60,11 @@ private fun GestoCardsPreviewLight() = GestoPreviewSurface(darkTheme = false) { 
 @Composable
 private fun CardsPreviewBody() {
     Column(verticalArrangement = Arrangement.spacedBy(GestoTheme.spacing.xl)) {
-        DiscoveredHostCard(
-            host = DiscoveredHost(
-                hostName = "frumorn-desktop",
-                address = "192.168.1.42",
-                port = 47771,
-                fingerprint = "SHA256:7f1a3c9d20e4b8a6f0c1d2e3f4a5b6c7d8e9f0a1",
-                inputSupported = true,
-                inputBackend = "wayland-portal",
-                captureSupported = true,
-                captureBackend = "wayland-screencast-portal",
-            ),
-            onClick = {},
-        )
+        GestoCard {
+            Text("Card", style = MaterialTheme.typography.titleMedium)
+        }
+        GestoCard(onClick = {}) {
+            Text("Tappable card", style = MaterialTheme.typography.titleMedium)
+        }
     }
 }

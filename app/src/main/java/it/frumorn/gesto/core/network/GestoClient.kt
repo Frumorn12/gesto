@@ -22,6 +22,7 @@ class GestoClient {
         const val PING_TIMEOUT_MS = 3_000
         /** For a request the user answers on the PC (approval pairing). */
         const val APPROVAL_TIMEOUT_MS = 130_000
+        const val APP_VERSION = "0.2.0"
     }
 
     private val transportMutex = Mutex()
@@ -30,48 +31,141 @@ class GestoClient {
     /** Guards [channel] replacement against [shutdown] from another thread. */
     private val channelLock = Any()
     private var shutDown = false
+    /** The pairing being waited for; guarded by [channelLock]. */
+    private var pairingAttempt: PairingAttempt? = null
 
+    /** One pairing in flight. Both fields are guarded by [channelLock]. */
+    private class PairingAttempt {
+        var channel: SecureChannel? = null
+        var cancelled = false
+
+        fun cancelLocked() {
+            cancelled = true
+            channel?.close()
+        }
+    }
+
+    /** Pairs with the 6-digit code `gesto pair` (or `waypad-daemon pair-code`) printed on the PC. */
     suspend fun pair(
         address: String,
         port: Int,
         deviceName: String,
         pairingCode: String,
         expectedFingerprint: String? = null,
-    ): Pair<TrustedHost, CapabilitySummary> = withContext(Dispatchers.IO) { transportMutex.withLock {
-        // The live channel stays open until the new one is established, so a failed attempt
-        // leaves the current session intact.
-        val ch = SecureChannel.connect(address, port, expectedFingerprint)
-        // Everything that can fail happens before the old channel is touched; the new one is
-        // closed on any failure.
-        val (host, capabilities) = try {
-            val id = requestId()
-            ch.send(
-                JSONObject()
-                    .put("type", "pair_request")
-                    .put("request_id", id)
-                    .put("device_name", deviceName)
-                    .put("pairing_code", pairingCode)
-                    .put("app_version", "0.1.0")
-            )
-            val data = ch.receiveResponse(id, APPROVAL_TIMEOUT_MS).getJSONObject("data")
-            TrustedHost(
-                id = "${address}:${port}",
-                hostName = data.optString("host_name", address),
-                address = address,
-                port = port,
-                fingerprint = data.getString("host_fingerprint"),
-                deviceId = data.getString("device_id"),
-                sessionToken = data.getString("session_token"),
-                lastConnectedAt = System.currentTimeMillis(),
-                macAddresses = data.macAddresses(),
-            ) to data.optJSONObject("capabilities").toCapabilitySummary()
-        } catch (e: Throwable) {
-            ch.close()
-            throw e
+    ): Pair<TrustedHost, CapabilitySummary> = pairOver(address, port, expectedFingerprint, approval = false) { id ->
+        JSONObject()
+            .put("type", "pair_request")
+            .put("request_id", id)
+            .put("device_name", deviceName)
+            .put("pairing_code", pairingCode)
+            .put("app_version", "0.1.0")
+    }
+
+    /**
+     * Pairs by approval: the PC shows a notification with [pin] and the person there allows it. The
+     * answer can take up to two minutes; [cancelPairing] stops waiting and makes the PC withdraw the
+     * notification. A daemon that does not know this request fails with
+     * [ApprovalNotSupportedException].
+     */
+    suspend fun pairWithApproval(
+        address: String,
+        port: Int,
+        deviceName: String,
+        pin: String,
+        expectedFingerprint: String?,
+    ): Pair<TrustedHost, CapabilitySummary> = pairOver(address, port, expectedFingerprint, approval = true) { id ->
+        buildApprovalPairRequest(id, deviceName, pin, APP_VERSION)
+    }
+
+    /**
+     * Stops the pairing that is running, if any: its connection is closed (for an approval the PC then
+     * withdraws its notification) and it fails with [PairingCancelledException]. A pairing that has
+     * already been answered is not undone.
+     */
+    fun cancelPairing() = synchronized(channelLock) {
+        pairingAttempt?.cancelLocked()
+        pairingAttempt = null
+    }
+
+    /**
+     * One pairing exchange on its own connection. The wait happens outside [transportMutex], so a
+     * session already open keeps working while the PC decides; the mutex is taken only to swap the
+     * new channel in. The live channel stays open until then, so a failed attempt leaves it intact.
+     */
+    private suspend fun pairOver(
+        address: String,
+        port: Int,
+        expectedFingerprint: String?,
+        approval: Boolean,
+        request: (requestId: String) -> JSONObject,
+    ): Pair<TrustedHost, CapabilitySummary> {
+        // Registered before the first suspension, so a cancel that follows the call always finds it.
+        val attempt = beginPairing()
+        return withContext(Dispatchers.IO) {
+            try {
+                val ch = SecureChannel.connect(address, port, expectedFingerprint)
+                val registered = synchronized(channelLock) {
+                    val live = !attempt.cancelled && !shutDown
+                    if (live) attempt.channel = ch
+                    live
+                }
+                if (!registered) {
+                    ch.close()
+                    throw PairingCancelledException()
+                }
+                // Everything that can fail happens before the live channel is touched; the new one
+                // is closed on any failure.
+                val paired = try {
+                    val id = requestId()
+                    ch.send(request(id))
+                    val sentAt = System.nanoTime()
+                    try {
+                        val timeout = if (approval) APPROVAL_TIMEOUT_MS else RESPONSE_TIMEOUT_MS
+                        // A fresh channel has no one-way requests outstanding.
+                        val data = matchResponse(id, mutableListOf()) { ch.receive(timeout) }.getJSONObject("data")
+                        pairedHost(data, address, port)
+                    } catch (e: Throwable) {
+                        if (synchronized(channelLock) { attempt.cancelled }) throw PairingCancelledException()
+                        throw if (approval) classifyApprovalFailure(e, (System.nanoTime() - sentAt) / 1_000_000) else e
+                    }
+                } catch (e: Throwable) {
+                    ch.close()
+                    throw e
+                }
+                transportMutex.withLock {
+                    synchronized(channelLock) {
+                        if (attempt.cancelled) {
+                            ch.close()
+                            throw PairingCancelledException()
+                        }
+                        adopt(ch)
+                    }
+                }
+                paired
+            } finally {
+                synchronized(channelLock) { if (pairingAttempt === attempt) pairingAttempt = null }
+            }
         }
-        adopt(ch)
-        host to capabilities
-    } }
+    }
+
+    /** Starts tracking a new pairing; one that was still running is cancelled. */
+    private fun beginPairing(): PairingAttempt = synchronized(channelLock) {
+        pairingAttempt?.cancelLocked()
+        PairingAttempt().also { pairingAttempt = it }
+    }
+
+    private fun pairedHost(data: JSONObject, address: String, port: Int): Pair<TrustedHost, CapabilitySummary> =
+        TrustedHost(
+            id = "${address}:${port}",
+            hostName = data.optString("host_name", address),
+            address = address,
+            port = port,
+            fingerprint = data.getString("host_fingerprint"),
+            deviceId = data.getString("device_id"),
+            sessionToken = data.getString("session_token"),
+            lastConnectedAt = System.currentTimeMillis(),
+            macAddresses = data.macAddresses(),
+        ) to data.optJSONObject("capabilities").toCapabilitySummary()
 
     /** Opens an authenticated session with a paired PC. */
     suspend fun connect(host: TrustedHost): ConnectResult = withContext(Dispatchers.IO) { transportMutex.withLock {
@@ -235,6 +329,8 @@ class GestoClient {
     /** Closes the client for good (the ViewModel is going away). */
     fun shutdown() = synchronized(channelLock) {
         shutDown = true
+        pairingAttempt?.cancelLocked()
+        pairingAttempt = null
         close()
     }
 
@@ -303,6 +399,50 @@ data class ConnectResult(
     val capabilities: CapabilitySummary,
     val macAddresses: List<String> = emptyList(),
 )
+
+/** The `approval_pair_request` message: the PC shows [pin] in a notification and asks whether to let [deviceName] in. */
+fun buildApprovalPairRequest(requestId: String, deviceName: String, pin: String, appVersion: String): JSONObject =
+    JSONObject()
+        .put("type", "approval_pair_request")
+        .put("request_id", requestId)
+        .put("device_name", deviceName)
+        .put("pin", pin)
+        .put("app_version", appVersion)
+
+/** How soon after the request an old daemon gives itself away. */
+internal const val OLD_DAEMON_WINDOW_MS = 3_000L
+
+/** Messages of a connection that ended, or of an answer the app cannot read. */
+private val UNREADABLE_ANSWERS = setOf("Connection closed", "Unexpected server message", "Response ID mismatch")
+
+/**
+ * A daemon from before approval pairing does not know the request and drops the connection at once
+ * (or answers something the app cannot read). Such a failure within [OLD_DAEMON_WINDOW_MS] of
+ * sending becomes [ApprovalNotSupportedException]; anything else, or later, is returned as it is.
+ */
+internal fun classifyApprovalFailure(error: Throwable, elapsedMs: Long): Throwable {
+    if (elapsedMs > OLD_DAEMON_WINDOW_MS) return error
+    val chain = generateSequence(error) { it.cause }.take(8).toList()
+    if (chain.any { it is GestoApiException || it is java.net.SocketTimeoutException }) return error
+    val oldDaemon = chain.any {
+        it is java.io.EOFException ||
+            it is java.net.SocketException ||
+            it is org.json.JSONException ||
+            (it is IllegalStateException && it.message in UNREADABLE_ANSWERS)
+    }
+    return if (oldDaemon) ApprovalNotSupportedException(error) else error
+}
+
+/** The PC runs a daemon that cannot ask for approval: pair it with a code instead. */
+class ApprovalNotSupportedException(cause: Throwable) :
+    java.io.EOFException("The PC cannot approve pairing requests") {
+    init {
+        initCause(cause)
+    }
+}
+
+/** The pairing was stopped by [GestoClient.cancelPairing] (or a newer pairing). */
+class PairingCancelledException : java.io.IOException("Pairing cancelled")
 
 /** `data.mac_addresses` of a pair or auth response, keeping only well-formed addresses. */
 internal fun JSONObject.macAddresses(): List<String> {

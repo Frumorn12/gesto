@@ -40,6 +40,12 @@ class HostPresenceTracker(private val missesForOffline: Int = 3) {
         }
     }
 
+    /** Forgets every scan: each PC is Unknown until the scans that follow. */
+    fun reset() {
+        misses.clear()
+        everSeen.clear()
+    }
+
     /** A PC that was forgotten starts over if it is paired again. */
     private fun forgetMissing(hosts: List<TrustedHost>) {
         val ids = hosts.mapTo(HashSet()) { it.id }

@@ -84,4 +84,14 @@ class HostPresenceTrackerTest {
         val blank = a.copy(fingerprint = "")
         assertEquals(Presence.Unknown, tracker.onScan(setOf(""), listOf(blank))["a"])
     }
+
+    @Test fun reset_forgets_every_scan() {
+        val tracker = HostPresenceTracker()
+        tracker.onScan(setOf("fp-a"), listOf(a, b))
+        repeat(3) { tracker.onScan(setOf("fp-a"), listOf(a, b)) }
+        tracker.reset()
+        assertEquals(mapOf("a" to Presence.Unknown, "b" to Presence.Unknown), tracker.presence(listOf(a, b)))
+        // Counting starts again from the first scan after the reset.
+        assertEquals(Presence.Unknown, tracker.onScan(emptySet(), listOf(a, b))["b"])
+    }
 }

@@ -1,11 +1,11 @@
 package it.frumorn.gesto.ui.state
 
 import androidx.compose.runtime.Immutable
+import it.frumorn.gesto.AddPcStep
 import it.frumorn.gesto.SessionMode
 import it.frumorn.gesto.core.externalinput.ExternalInputDeviceSummary
 import it.frumorn.gesto.core.input.RemoteGestureMode
 import it.frumorn.gesto.core.model.CapabilitySummary
-import it.frumorn.gesto.core.model.DiscoveredHost
 import it.frumorn.gesto.core.model.ScreenSource
 import it.frumorn.gesto.core.model.ScreenStreamStats
 import it.frumorn.gesto.core.model.StreamSettings
@@ -42,18 +42,29 @@ data class LaunchUiState(
     val sameNetwork: Boolean = false,
 )
 
+/** A PC the search found. */
 @Immutable
-data class DiscoveryUiState(
-    val discoveredHosts: List<DiscoveredHost> = emptyList(),
-    val manualAddress: String = "",
-    val manualPort: String = "47771",
+data class FoundPcState(
+    /** Identifies the PC in [AddPcActions.onSelectPc]. */
+    val key: String,
+    /** The name the user gave it if it is already paired, else the PC's own. */
+    val name: String,
+    /** This phone is already paired with it (picking it pairs again). */
+    val alreadyAdded: Boolean,
 )
 
+/** "Add a PC": which step is shown and what each step needs. */
 @Immutable
-data class PairingUiState(
-    val hostName: String? = null,
-    val fingerprint: String? = null,
-    val pairingCode: String = "",
+data class AddPcUiState(
+    val step: AddPcStep = AddPcStep.Search,
+    val found: List<FoundPcState> = emptyList(),
+    /** The four digits the PC shows in its notification. */
+    val pin: String = "",
+    val code: String = "",
+    /** The PC's answer is awaited (PIN or code). */
+    val busy: Boolean = false,
+    val address: String = "",
+    val port: String = "47771",
 )
 
 @Immutable

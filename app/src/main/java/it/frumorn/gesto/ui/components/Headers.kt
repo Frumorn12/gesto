@@ -18,6 +18,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import it.frumorn.gesto.R
 import it.frumorn.gesto.ui.theme.GestoPreviewSurface
@@ -39,13 +41,15 @@ fun SectionHeader(title: String, subtitle: String, modifier: Modifier = Modifier
 
 /**
  * Top bar of the screens outside a session: a back arrow (or, on the PCs list, the Gesto mark and
- * name), optionally the settings entry, and the error strip of the old screens underneath.
+ * name), optionally a centred [title] and the settings entry, and the error strip of the old
+ * screens underneath.
  */
 @Composable
 fun GestoPageBar(
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
+    title: String? = null,
     error: String? = null,
 ) {
     val spacing = GestoTheme.spacing
@@ -70,7 +74,20 @@ fun GestoPageBar(
                 Spacer(Modifier.width(spacing.md))
                 Text(stringResource(R.string.app_name), style = GestoTheme.accentTypography.brand)
             }
-            Spacer(Modifier.weight(1f))
+            if (title != null) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                // Balances the back arrow so the title sits in the middle.
+                if (onOpenSettings == null) Spacer(Modifier.width(spacing.barSideSlot))
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
             if (onOpenSettings != null) {
                 GestoIconButton(onClick = onOpenSettings) {
                     Icon(
@@ -95,6 +112,12 @@ private fun GestoPageBarPreviewHome() = GestoPreviewSurface(darkTheme = false) {
         GestoPageBar(onOpenSettings = {})
         SectionHeader("Your PCs", "Pick the PC you want to control.")
     }
+}
+
+@Preview(name = "Page bar - back, title - light")
+@Composable
+private fun GestoPageBarPreviewTitle() = GestoPreviewSurface(darkTheme = false) {
+    GestoPageBar(onBack = {}, title = "Add a PC")
 }
 
 @Preview(name = "Page bar - back, error - dark")

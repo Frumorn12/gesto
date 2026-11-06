@@ -8,7 +8,6 @@ import java.net.SocketException
 import java.net.SocketTimeoutException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -31,25 +30,6 @@ class TransportFailureTest {
 
     @Test fun otherErrorsAreNot() {
         assertFalse(IllegalStateException("boom").isTransportFailure())
-    }
-
-    private val host = TrustedHost(
-        id = "a:1", hostName = "A", address = "a", port = 1, fingerprint = "f",
-        deviceId = "d", sessionToken = "t", lastConnectedAt = 0,
-    )
-
-    @Test fun failedAttemptWithHeldSessionGoesBackToConnected() {
-        val s = GestoUiState(connectedHost = host, connectionState = ConnectionState.Connecting)
-            .afterFailedAttempt("Connection failed", "x")
-        assertEquals(ConnectionState.Connected, s.connectionState)
-        assertEquals(host, s.connectedHost)
-    }
-
-    @Test fun failedAttemptWithoutSessionIsError() {
-        val s = GestoUiState(connectionState = ConnectionState.Pairing).afterFailedAttempt("Pairing failed", "bad")
-        assertEquals(ConnectionState.Error, s.connectionState)
-        assertEquals("bad", s.error)
-        assertNull(s.connectedHost)
     }
 }
 

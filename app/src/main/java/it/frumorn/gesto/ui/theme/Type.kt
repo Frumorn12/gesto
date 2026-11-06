@@ -60,6 +60,10 @@ data class GestoAccentTypography(
     val fingerprint: TextStyle = style(12, 16, FontWeight.Medium).copy(fontFamily = FontFamily.Monospace),
     /** Read-outs in the diagnostics HUDs. */
     val telemetry: TextStyle = style(11, 16, FontWeight.Medium).copy(fontFamily = FontFamily.Monospace),
+    /** One digit of the pairing PIN. */
+    val pinDigit: TextStyle = style(30, 36, FontWeight.SemiBold),
+    /** A command to type on the PC (`gesto pair`). */
+    val command: TextStyle = style(14, 20, FontWeight.Medium).copy(fontFamily = FontFamily.Monospace),
 )
 
 val LocalGestoAccentTypography = staticCompositionLocalOf { GestoAccentTypography() }

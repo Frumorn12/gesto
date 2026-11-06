@@ -80,4 +80,36 @@
     <string name="error_session_expired">Questo telefono non è più accoppiato con il PC. Accoppialo di nuovo.</string>
     <string name="error_connection_lost">Connessione con %1$s persa.</string>
     <string name="error_generic">Qualcosa non ha funzionato: %1$s</string>
+
+    <string name="add_confirm_title">Conferma sul PC</string>
+    <string name="add_steps">Passo %1$d di %2$d</string>
+    <string name="add_searching">Cerco PC nella tua rete…</string>
+    <string name="add_searching_hint">Sul PC deve essere acceso Gesto.</string>
+    <string name="add_found_new">Nella tua rete</string>
+    <string name="add_found_added">Già aggiunto</string>
+    <string name="add_cant_find">Non lo trovi?</string>
+    <string name="add_scan_qr">Inquadra il QR dal PC</string>
+    <string name="add_type_address">Scrivi l\'indirizzo</string>
+    <string name="add_pin_text">Sul PC è comparsa una notifica con questo numero.</string>
+    <string name="add_pin_allow">Se è uguale, premi %1$s sul PC.</string>
+    <string name="add_pin_described">PIN %1$s</string>
+    <string name="add_pin_waiting">In attesa del PC…</string>
+    <string name="add_code_text">Sul PC apri un terminale e scrivi</string>
+    <string name="add_code_old">Con una versione precedente: %1$s</string>
+    <string name="add_code_label">Codice a 6 cifre</string>
+    <string name="add_code_submit">Aggiungi il PC</string>
+    <string name="add_address_text">L\'indirizzo del PC nella tua rete, per esempio 192.168.1.20.</string>
+    <string name="add_address_label">Indirizzo</string>
+    <string name="add_port_label">Porta</string>
+    <string name="add_address_submit">Continua</string>
+    <string name="notice_pc_added">%1$s aggiunto.</string>
+    <string name="error_invite_invalid">Questo QR non è un invito di Gesto.</string>
+
+    <string name="qr_hint">Sul PC scrivi %1$s</string>
+    <string name="qr_close">Chiudi la fotocamera</string>
+    <string name="qr_permission_title">Gesto ha bisogno della fotocamera per leggere il QR</string>
+    <string name="qr_permission_text">La fotocamera serve solo a leggere il QR mostrato dal PC.</string>
+    <string name="qr_permission_denied">Accesso alla fotocamera negato. Consentilo per inquadrare il QR.</string>
+    <string name="qr_allow_camera">Consenti la fotocamera</string>
+    <string name="qr_camera_failed">La fotocamera non si è avviata.</string>
 </resources>

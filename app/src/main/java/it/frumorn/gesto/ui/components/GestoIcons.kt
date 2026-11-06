@@ -55,6 +55,15 @@ object GestoIcons {
     }
     /** The power symbol, for waking a PC. */
     val Wake: ImageVector by lazy { lineIcon("Wake", "M12 3v8", "M7.5 6.5a7 7 0 1 0 9 0") }
+    /** A monitor on its stand: a PC found on the network. */
+    val Pc: ImageVector by lazy { lineIcon("Pc", rect(3, 4, 18, 12), "M9 20h6M12 16v4") }
+    /** Three finder squares and a dot: scan a QR. */
+    val Qr: ImageVector by lazy {
+        lineIcon("Qr", rect(4, 4, 6, 6), rect(14, 4, 6, 6), rect(4, 14, 6, 6), "M14 14h2v2h-2zM18 18h2v2h-2zM14 20h2M20 14v2")
+    }
+    /** A pencil: type something in. */
+    val Edit: ImageVector by lazy { lineIcon("Edit", "M4 20h4L19 9l-4-4L4 16z", "M13 7l4 4") }
+    val Chevron: ImageVector by lazy { lineIcon("Chevron", "M9 5l7 7-7 7") }
 }
 
 private fun rect(x: Int, y: Int, w: Int, h: Int) = "M$x ${y}h${w}v${h}h-${w}z"
@@ -94,6 +103,10 @@ private fun GestoIconsPreview() = GestoPreviewSurface(darkTheme = false) {
         }
         Row {
             listOf(GestoIcons.Touch, GestoIcons.Quality, GestoIcons.Game, GestoIcons.Exit, GestoIcons.More, GestoIcons.Wake)
+                .forEach { Icon(it, contentDescription = null) }
+        }
+        Row {
+            listOf(GestoIcons.Pc, GestoIcons.Qr, GestoIcons.Edit, GestoIcons.Chevron)
                 .forEach { Icon(it, contentDescription = null) }
         }
     }
