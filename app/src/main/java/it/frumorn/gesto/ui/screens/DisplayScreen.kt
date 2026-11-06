@@ -93,38 +93,38 @@ fun DisplayScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { currentActions.onReleasePointerButtons() }
     DisposableEffect(Unit) { onDispose { currentActions.onReleasePointerButtons() } }
 
-    if (state.fullscreen) {
-        RemoteVideo(
-            state = state,
-            actions = actions,
-            videoSurface = videoSurface,
-            modifier = modifier.fillMaxSize(),
-        )
-        return
-    }
     val spacing = GestoTheme.spacing
+    val ratio = state.frameWidth?.let { w -> state.frameHeight?.takeIf { it > 0 }?.let { h -> w.toFloat() / h } }
+        ?: DEFAULT_ASPECT_RATIO
     Column(modifier.fillMaxSize()) {
-        val ratio = state.frameWidth?.let { w -> state.frameHeight?.takeIf { it > 0 }?.let { h -> w.toFloat() / h } }
-            ?: DEFAULT_ASPECT_RATIO
+        // One call site, always the first child: turning the phone or switching Game mode only
+        // changes its size, so the video view (and the decoder's surface) survives. Two call sites
+        // would release the view and restart the decoder on every turn, with a black gap.
         RemoteVideo(
             state = state,
             actions = actions,
             videoSurface = videoSurface,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(ratio),
+            modifier = if (state.fullscreen) {
+                Modifier.fillMaxSize()
+            } else {
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(ratio)
+            },
         )
-        Column(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = spacing.gutter, vertical = spacing.xxl),
-            verticalArrangement = Arrangement.spacedBy(spacing.lg),
-        ) {
-            QuickTiles(state, actions)
-            RotateHint()
-            TouchModeLine(state.touchMode)
+        if (!state.fullscreen) {
+            Column(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = spacing.gutter, vertical = spacing.xxl),
+                verticalArrangement = Arrangement.spacedBy(spacing.lg),
+            ) {
+                QuickTiles(state, actions)
+                RotateHint()
+                TouchModeLine(state.touchMode)
+            }
         }
     }
 }

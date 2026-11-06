@@ -69,6 +69,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import it.frumorn.gesto.R
 import it.frumorn.gesto.core.input.RemoteGestureAction
+import it.frumorn.gesto.core.input.fingerScroll
 import it.frumorn.gesto.core.input.RemotePointer
 import it.frumorn.gesto.core.input.RemoteTouchpadGestureMachine
 import it.frumorn.gesto.core.model.ButtonState
@@ -136,7 +137,7 @@ fun TouchpadScreen(
                 cursorX = (cursorX + sent.dx / NOMINAL_PC_WIDTH).coerceIn(0f, 1f)
                 cursorY = (cursorY + sent.dy / NOMINAL_PC_HEIGHT).coerceIn(0f, 1f)
             }
-            is RemoteGestureAction.Scroll -> currentActions.onScroll(action.dx, action.dy, false)
+            is RemoteGestureAction.Scroll -> fingerScroll(action.dx, action.dy).let { currentActions.onScroll(it.dx, it.dy, false) }
             RemoteGestureAction.FinishScroll -> currentActions.onScroll(0f, 0f, true)
             RemoteGestureAction.Click -> click(PointerButton.Left)
             RemoteGestureAction.RightClick -> click(PointerButton.Right)
@@ -463,7 +464,7 @@ internal fun highlightPlaceholder(template: String, value: String, style: SpanSt
     }
 }
 
-/** Between Left and Right: drag up or down on it to scroll, like a mouse wheel. */
+/** Between Left and Right: drag up or down on it to scroll; the page follows the finger, see [fingerScroll]. */
 @Composable
 private fun ScrollStrip(actions: () -> TouchpadActions, modifier: Modifier = Modifier) {
     val spacing = GestoTheme.spacing
@@ -495,7 +496,7 @@ private fun ScrollStrip(actions: () -> TouchpadActions, modifier: Modifier = Mod
                     onDragCancel = ::finish,
                 ) { change, dy ->
                     change.consume()
-                    actions().onScroll(0f, dy, false)
+                    fingerScroll(0f, dy).let { actions().onScroll(it.dx, it.dy, false) }
                 }
             },
         contentAlignment = Alignment.Center,

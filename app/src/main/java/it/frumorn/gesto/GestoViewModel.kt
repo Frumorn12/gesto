@@ -1786,6 +1786,8 @@ class GestoViewModel(
                     )
                 }
             } else if (attempt >= SCREEN_STREAM_MAX_RETRIES) {
+                // Given up: no stream is wanted any more, so the next reconnect may start one again.
+                screenStreamDesired = false
                 _state.update {
                     it.copy(
                         screenStreaming = false,

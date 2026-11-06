@@ -12,6 +12,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.systemGestureExclusion
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -20,6 +23,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.mandatorySystemGestures
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
@@ -98,7 +103,9 @@ fun QuickMenuLayer(state: QuickMenuUiState, actions: QuickMenuActions, modifier:
     val inset = with(density) { spacing.xxl.roundToPx() }
     val buttonSize = with(density) { spacing.quickButtonSize.roundToPx() }
     val gap = with(density) { spacing.md.roundToPx() }
-    BoxWithConstraints(modifier.fillMaxSize().windowInsetsPadding(WindowInsets.displayCutout)) {
+    // Away from the cutout and from the edges where a swipe means home or the system bars.
+    val room = WindowInsets.displayCutout.union(WindowInsets.mandatorySystemGestures)
+    BoxWithConstraints(modifier.fillMaxSize().windowInsetsPadding(room)) {
         val areaWidth = constraints.maxWidth
         val areaHeight = constraints.maxHeight
         val roomX = (areaWidth - 2 * inset - buttonSize).coerceAtLeast(0)
@@ -223,6 +230,8 @@ private fun QuickButton(
                 ),
             )
             .background(primary, shape)
+            // A drag that starts on the button near a side edge is the button's, not Back.
+            .systemGestureExclusion()
             .pointerInputDrag(onDrag = { currentDrag(it) }, onDragEnd = { currentDragEnd() })
             .clickable(role = Role.Button, onClick = onToggle)
             .semantics { contentDescription = description },
@@ -284,7 +293,9 @@ private fun QuickMenuPanel(state: QuickMenuUiState, enabled: Boolean, onEntry: (
                 ),
             )
             .background(menu.background, shape)
-            .border(spacing.borderWidth, menu.onBackground, shape),
+            .border(spacing.borderWidth, menu.onBackground, shape)
+            // Taller than the room it has (split screen, a short phone on its side): it scrolls.
+            .verticalScroll(rememberScrollState()),
     ) {
         state.entries.forEachIndexed { index, entry ->
             if (index > 0) HorizontalDivider(color = menu.outlineVariant, thickness = spacing.borderWidth)

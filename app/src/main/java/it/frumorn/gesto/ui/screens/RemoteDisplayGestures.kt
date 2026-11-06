@@ -19,6 +19,7 @@ import it.frumorn.gesto.core.input.PointerDelta
 import it.frumorn.gesto.core.input.RemoteGestureAction
 import it.frumorn.gesto.core.input.RemotePointer
 import it.frumorn.gesto.core.input.RemoteTouchpadGestureMachine
+import it.frumorn.gesto.core.input.fingerScroll
 import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.PointerButton
 import it.frumorn.gesto.core.model.TouchMode
@@ -87,6 +88,14 @@ fun Modifier.remoteDisplayGestures(
     zoom: () -> ZoomTransform,
     onZoom: (ZoomTransform) -> Unit,
 ): Modifier = pointerInput(touchMode, frameWidth, frameHeight, sourceKey, slops, twoFingerRightClick, callbacks) {
+    // Built once for the whole block, NOT per gesture: it has to remember the previous click to
+    // land a quick second tap on it (the stable double click). The block restarts, and so forgets
+    // it, only when the touch mode, the stream or the slops change.
+    val direct = if (touchMode == TouchMode.Direct) {
+        DirectTouchMachine(slopPx = slops.tapPx, doubleTapSlopPx = slops.doubleTapPx)
+    } else {
+        null
+    }
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
         down.consume()
@@ -155,8 +164,9 @@ fun Modifier.remoteDisplayGestures(
 
         fun onMulti(action: MultiTouchAction) {
             when (action) {
-                // The page follows the fingers, as on a phone.
-                is MultiTouchAction.Scroll -> callbacks.onScroll(-action.dx * SCROLL_DAMPING, -action.dy * SCROLL_DAMPING, false)
+                // The page follows the fingers, as everywhere in the app.
+                is MultiTouchAction.Scroll -> fingerScroll(action.dx, action.dy, SCROLL_DAMPING)
+                    .let { callbacks.onScroll(it.dx, it.dy, false) }
                 MultiTouchAction.FinishScroll -> callbacks.onScroll(0f, 0f, true)
                 is MultiTouchAction.Zoom -> onZoom(
                     zoom()
@@ -168,11 +178,6 @@ fun Modifier.remoteDisplayGestures(
             }
         }
 
-        val direct = if (touchMode == TouchMode.Direct) {
-            DirectTouchMachine(slopPx = slops.tapPx, doubleTapSlopPx = slops.doubleTapPx)
-        } else {
-            null
-        }
         // Built per gesture, like on the touchpad, so a setting change applies from the next touch.
         val pad = if (touchMode == TouchMode.Touchpad) {
             RemoteTouchpadGestureMachine(tapSlopPx = slops.tapPx, twoFingerTapEnabled = false)
