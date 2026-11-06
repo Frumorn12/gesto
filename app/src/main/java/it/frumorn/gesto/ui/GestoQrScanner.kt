@@ -114,16 +114,16 @@ fun GestoQrScannerOverlay(
         modifier
             .fillMaxSize()
             .background(GestoVideoLetterbox)
-            // The page underneath must not be touched through the camera (or its permission
-            // page): a found PC there would start a pairing. Taps on the overlay's own buttons
-            // reach them first.
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) awaitPointerEvent().changes.forEach { it.consume() }
-                }
-            }
             .semantics { isTraversalGroup = true },
     ) {
+        // A background layer behind the buttons: the page underneath must not be touched through the
+        // camera (or its permission page), since a found PC there would start a pairing. It sees
+        // pointer events without consuming them, so the overlay's own buttons still get plain clicks.
+        Box(
+            Modifier
+                .matchParentSize()
+                .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
+        )
         if (hasPermission) {
             CameraQrPreview(
                 onInviteScanned = { raw ->

@@ -13,6 +13,8 @@ import it.frumorn.gesto.core.model.CapabilitySummary
 import it.frumorn.gesto.core.model.ConnectionState
 import it.frumorn.gesto.core.model.DiscoveredHost
 import it.frumorn.gesto.core.model.label
+import it.frumorn.gesto.core.network.GestoInviteEndpoint
+import it.frumorn.gesto.ui.state.InviteEndpointState
 import it.frumorn.gesto.core.network.identity
 import it.frumorn.gesto.core.session.Presence
 import it.frumorn.gesto.core.session.isLocalNetworkAddress
@@ -232,7 +234,7 @@ internal fun GestoUiState.toAddPcState(): AddPcUiState = AddPcUiState(
     address = manualAddress,
     port = manualPort,
     inviteName = if (addPcStep == AddPcStep.Invite) selectedHost?.hostName.orEmpty() else "",
-    inviteAddress = if (addPcStep == AddPcStep.Invite) selectedHost?.let { inviteWhere(it.address, it.port) }.orEmpty() else "",
+    inviteEndpoints = if (addPcStep == AddPcStep.Invite) inviteEndpoints.map { inviteEndpointState(it) } else emptyList(),
 )
 
 /** Where an invite says the PC is: its address, with the port when it is not the usual one. */
@@ -240,6 +242,10 @@ internal fun inviteWhere(address: String, port: Int): String {
     val host = if (':' in address && !address.startsWith("[")) "[$address]" else address
     return if (port == DEFAULT_CONTROL_PORT) address else "$host:$port"
 }
+
+/** One line of the invite's confirmation: where, and whether the route leaves the local network. */
+internal fun inviteEndpointState(endpoint: GestoInviteEndpoint): InviteEndpointState =
+    InviteEndpointState(inviteWhere(endpoint.address, endpoint.port), internet = endpoint.route != "direct-lan")
 
 private const val DEFAULT_CONTROL_PORT = 47771
 

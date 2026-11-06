@@ -33,8 +33,15 @@ data class GestoInvite(
         captureBackend = "invite",
     )
 
-    fun toCandidateHosts(): List<DiscoveredHost> =
+    /**
+     * Every endpoint the app may dial for this invite. The confirmation lists exactly these and
+     * pairing dials exactly these (see [toCandidateHosts]): nothing is dialed that was not shown.
+     */
+    fun dialedEndpoints(): List<GestoInviteEndpoint> =
         endpoints.ifEmpty { listOf(GestoInviteEndpoint(address, port, route)) }
+
+    fun toCandidateHosts(): List<DiscoveredHost> =
+        dialedEndpoints()
             .map { endpoint ->
                 DiscoveredHost(
                     hostName = hostName.ifBlank { endpoint.address },

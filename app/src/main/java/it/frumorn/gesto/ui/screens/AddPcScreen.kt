@@ -70,6 +70,7 @@ import it.frumorn.gesto.ui.components.GestoTextButton
 import it.frumorn.gesto.ui.state.AddPcActions
 import it.frumorn.gesto.ui.state.AddPcUiState
 import it.frumorn.gesto.ui.state.FoundPcState
+import it.frumorn.gesto.ui.state.InviteEndpointState
 import it.frumorn.gesto.ui.theme.GestoMotion
 import it.frumorn.gesto.ui.theme.GestoTheme
 import it.frumorn.gesto.ui.theme.ThemeMode
@@ -431,10 +432,21 @@ private fun InviteStep(state: AddPcUiState, actions: AddPcActions) {
         StepBars(current = 2)
         Spacer(Modifier.height(spacing.section))
         Text(
-            stringResource(R.string.add_invite_question, state.inviteName, state.inviteAddress),
+            stringResource(R.string.add_invite_question, state.inviteName),
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center,
         )
+        Spacer(Modifier.height(spacing.md))
+        state.inviteEndpoints.forEach { endpoint ->
+            Text(
+                stringResource(
+                    if (endpoint.internet) R.string.add_invite_from_internet else R.string.add_invite_on_network,
+                    endpoint.where,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
+        }
         Spacer(Modifier.height(spacing.md))
         Text(
             stringResource(R.string.add_invite_hint),
@@ -566,7 +578,7 @@ private fun AddPcCodePreview() = AddPcPreview(ThemeMode.Light, AddPcUiState(step
 @Composable
 private fun AddPcInvitePreview() = AddPcPreview(
     ThemeMode.Light,
-    AddPcUiState(step = AddPcStep.Invite, inviteName = "Legion", inviteAddress = "192.168.0.22"),
+    AddPcUiState(step = AddPcStep.Invite, inviteName = "Legion", inviteEndpoints = listOf(InviteEndpointState("192.168.0.22", false), InviteEndpointState("203.0.113.44", true))),
 )
 
 @Preview(name = "Add a PC - address - dark", widthDp = 412, heightDp = 860)

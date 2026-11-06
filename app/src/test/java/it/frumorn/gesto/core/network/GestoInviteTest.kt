@@ -41,6 +41,19 @@ class GestoInviteTest {
         assertEquals(listOf("direct-public", "direct-lan"), invite.endpoints.map { it.route })
     }
 
+    @Test
+    fun dialedEndpointsAreExactlyTheCandidatesBuilt() {
+        val invite = GestoInvite.parse(
+            "waypad://invite?lan_address=192.168.1.20&remote_address=pc.example.test&port=47771&code=654321",
+        )
+
+        assertEquals(
+            invite.dialedEndpoints().map { it.address to it.port },
+            invite.toCandidateHosts().map { it.address to it.port },
+        )
+        assertEquals(2, invite.toCandidateHosts().size)
+    }
+
     private val sampleQuery = "invite?v=1&host=pc&address=192.0.2.10&port=47771&code=123456&fingerprint=abcd&expires=42"
 
     @Test

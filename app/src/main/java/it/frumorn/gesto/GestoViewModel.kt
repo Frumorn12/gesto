@@ -50,6 +50,7 @@ import it.frumorn.gesto.core.network.WakeOnLan
 import it.frumorn.gesto.core.network.mergeSightings
 import it.frumorn.gesto.core.network.RequestMayHaveRunException
 import it.frumorn.gesto.core.network.GestoDiscovery
+import it.frumorn.gesto.core.network.GestoInviteEndpoint
 import it.frumorn.gesto.core.network.GestoInvite
 import it.frumorn.gesto.core.network.PairingCancelledException
 import it.frumorn.gesto.core.network.identity
@@ -152,6 +153,8 @@ data class GestoUiState(
     /** The last reply of each PC the presence scans found, for the capabilities on the PC cards. */
     val scannedHosts: List<DiscoveredHost> = emptyList(),
     val selectedHost: DiscoveredHost? = null,
+    /** Every endpoint the pending invite may be dialed at, shown on its confirmation. */
+    val inviteEndpoints: List<GestoInviteEndpoint> = emptyList(),
     val connectedHost: TrustedHost? = null,
     val capabilities: CapabilitySummary = CapabilitySummary(),
     val pairingCode: String = "",
@@ -533,9 +536,11 @@ class GestoViewModel(
      */
     private fun rememberConnection(host: TrustedHost, result: ConnectResult, touch: Boolean = true): TrustedHost {
         val macs = result.macAddresses
-        if (!touch && (macs.isEmpty() || macs == host.macAddresses)) return host
+        if (!touch && !host.needsRepair && (macs.isEmpty() || macs == host.macAddresses)) return host
         return store.update(host.id) { stored ->
             stored.copy(
+                // The PC accepted this phone's token: it is paired after all.
+                needsRepair = false,
                 lastConnectedAt = if (touch) System.currentTimeMillis() else stored.lastConnectedAt,
                 macAddresses = macs.ifEmpty { stored.macAddresses },
             )
@@ -858,6 +863,7 @@ class GestoViewModel(
                 _state.update {
                     it.copy(
                         selectedHost = invite.toDiscoveredHost(),
+                        inviteEndpoints = invite.dialedEndpoints(),
                         pairingCode = invite.pairingCode,
                         manualAddress = invite.address,
                         manualPort = invite.port.toString(),

@@ -167,7 +167,9 @@
     <string name="notice_pc_added">%1$s aggiunto.</string>
     <string name="error_invite_invalid">Questo QR non è un invito di Gesto.</string>
     <string name="error_invite_expired">Questo invito è scaduto. Creane uno nuovo sul PC.</string>
-    <string name="add_invite_question">Accoppiare %1$s (%2$s)?</string>
+    <string name="add_invite_question">Accoppiare %1$s?</string>
+    <string name="add_invite_on_network">Sulla tua rete: %1$s</string>
+    <string name="add_invite_from_internet">Da internet: %1$s</string>
     <string name="add_invite_hint">Accoppia solo un PC che conosci: vedrà quello che scrivi e ti mostrerà il suo schermo.</string>
     <string name="action_pair">Accoppia</string>
 

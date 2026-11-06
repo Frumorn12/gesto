@@ -91,8 +91,11 @@ data class AddPcUiState(
     val port: String = "47771",
     /** The PC an invite names, and where it says the PC is, for the confirmation before pairing. */
     val inviteName: String = "",
-    val inviteAddress: String = "",
+    val inviteEndpoints: List<InviteEndpointState> = emptyList(),
 )
+
+/** An address the invite may be dialed at; [internet] when it is not on the local network. */
+data class InviteEndpointState(val where: String, val internet: Boolean)
 
 /** Whether the PC takes the touchpad's input, as far as the app knows. */
 enum class TouchpadInput {

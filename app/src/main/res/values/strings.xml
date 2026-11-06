@@ -172,7 +172,9 @@
     <string name="notice_pc_added">%1$s added.</string>
     <string name="error_invite_invalid">This QR isn\'t a Gesto invite.</string>
     <string name="error_invite_expired">This invite has expired. Make a new one on the PC.</string>
-    <string name="add_invite_question">Pair with %1$s at %2$s?</string>
+    <string name="add_invite_question">Pair with %1$s?</string>
+    <string name="add_invite_on_network">On your network: %1$s</string>
+    <string name="add_invite_from_internet">From the internet: %1$s</string>
     <string name="add_invite_hint">Only pair with a PC you know: it will see what you type and show you its screen.</string>
     <string name="action_pair">Pair</string>
 
