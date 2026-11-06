@@ -256,6 +256,7 @@ internal fun GestoUiState.toControlsState(): ControlsUiState = ControlsUiState(
     volumeSupported = capabilities.volume,
     brightnessSupported = capabilities.brightness,
     shortcutsSupported = capabilities.inputSupported,
+    hostName = connectedHost?.label.orEmpty(),
     lockSupported = capabilities.lock,
     suspendSupported = capabilities.suspend,
     apps = capabilities.apps,

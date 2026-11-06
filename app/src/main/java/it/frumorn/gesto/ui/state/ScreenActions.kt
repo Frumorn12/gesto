@@ -113,7 +113,7 @@ data class ControlsActions(
     val onBrightness: (String) -> Unit = {},
     val onSystem: (String) -> Unit = {},
     /** One shortcut by daemon key names (`["ctrl", "c"]`). */
-    val onShortcut: (List<String>) -> Unit = {},
+    val onShortcut: (keys: List<String>, notice: Int) -> Unit = { _, _ -> },
     val onLaunchApp: (RemoteApp) -> Unit = {},
 )
 

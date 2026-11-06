@@ -41,7 +41,7 @@ import it.frumorn.gesto.ui.theme.GestoTheme
 private val ButtonHeight = 48.dp
 private val IconGap = 8.dp
 private val IconTarget = 40.dp
-private const val DisabledAlpha = 0.38f
+internal const val DisabledAlpha = 0.38f
 
 private fun Modifier.described(description: String?): Modifier =
     if (description == null) this else semantics { contentDescription = description }

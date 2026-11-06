@@ -198,8 +198,19 @@
     <string name="shortcut_terminal">Terminal</string>
     <string name="shortcut_launcher">Launcher</string>
     <string name="shortcut_esc">Esc</string>
-    <string name="notice_shortcut_sent">Sent %1$s</string>
+    <string name="notice_shortcut_copy">Copy sent</string>
+    <string name="notice_shortcut_paste">Paste sent</string>
+    <string name="notice_shortcut_undo">Undo sent</string>
+    <string name="notice_shortcut_save">Save sent</string>
+    <string name="notice_shortcut_close">Close sent</string>
+    <string name="notice_shortcut_terminal">Terminal opened</string>
+    <string name="notice_shortcut_launcher">Launcher opened</string>
+    <string name="notice_shortcut_esc">Esc sent</string>
     <string name="notice_app_starting">Starting %1$s on the PC</string>
     <string name="notice_pc_locked">PC locked</string>
     <string name="notice_pc_suspending">PC going to sleep</string>
+    <string name="commands_this_pc">this PC</string>
+    <string name="commands_suspend_title">Suspend %1$s?</string>
+    <string name="commands_suspend_confirm">Suspend</string>
+    <string name="commands_cancel">Cancel</string>
 </resources>

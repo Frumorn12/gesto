@@ -19,7 +19,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,16 +46,19 @@ const val HOLD_TO_CONFIRM_MS = 1_200
 /**
  * A destructive action that runs only after the finger has stayed on it for [HOLD_TO_CONFIRM_MS]:
  * a red bar fills the button meanwhile, and lifting early empties it and does nothing. A screen
- * reader gets a plain activate action, since holding is not possible there.
+ * reader's activate action (and any tap without a hold) calls [onActivate], which should ask first: it never runs [onConfirmed] by itself.
  */
 @Composable
 fun HoldToConfirmButton(
     text: String,
     onConfirmed: () -> Unit,
+    onActivate: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     icon: ImageVector? = null,
 ) {
+    val currentConfirmed by rememberUpdatedState(onConfirmed)
+    val currentActivate by rememberUpdatedState(onActivate)
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
@@ -61,11 +66,11 @@ fun HoldToConfirmButton(
     val shape = MaterialTheme.shapes.extraSmall
     Surface(
         modifier = modifier
-            .commandHeight()
-            .alpha(if (enabled) 1f else 0.38f)
+            .fillMaxWidth().height(GestoTheme.spacing.commandKeyHeight)
+            .alpha(if (enabled) 1f else DisabledAlpha)
             .semantics(mergeDescendants = true) {
                 role = Role.Button
-                if (enabled) onClick { onConfirmed(); true }
+                if (enabled) onClick { currentActivate(); true }
             }
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
@@ -75,7 +80,7 @@ fun HoldToConfirmButton(
                             progress.snapTo(0f)
                             progress.animateTo(1f, tween(HOLD_TO_CONFIRM_MS, easing = LinearEasing))
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onConfirmed()
+                            currentConfirmed()
                             progress.snapTo(0f)
                         }
                         tryAwaitRelease()
@@ -110,11 +115,9 @@ fun HoldToConfirmButton(
     }
 }
 
-@Composable
-private fun Modifier.commandHeight(): Modifier = this.then(Modifier.fillMaxWidth()).height(GestoTheme.spacing.commandKeyHeight)
 
 @Preview(name = "HoldToConfirm")
 @Composable
 private fun HoldToConfirmPreview() = GestoPreviewSurface {
-    HoldToConfirmButton("Hold to suspend", onConfirmed = {}, icon = GestoIcons.Moon)
+    HoldToConfirmButton("Hold to suspend", onConfirmed = {}, onActivate = {}, icon = GestoIcons.Moon)
 }

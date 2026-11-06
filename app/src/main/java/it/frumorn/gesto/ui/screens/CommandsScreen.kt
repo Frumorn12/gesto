@@ -11,6 +11,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import it.frumorn.gesto.ui.components.GestoDialog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -34,18 +39,19 @@ internal data class CommandShortcut(
     @StringRes val label: Int,
     val icon: ImageVector,
     val keys: List<String>,
+    @StringRes val notice: Int,
 )
 
 internal val CommandShortcuts: List<CommandShortcut> by lazy {
     listOf(
-        CommandShortcut(R.string.shortcut_copy, GestoIcons.Copy, listOf("ctrl", "c")),
-        CommandShortcut(R.string.shortcut_paste, GestoIcons.Paste, listOf("ctrl", "v")),
-        CommandShortcut(R.string.shortcut_undo, GestoIcons.Undo, listOf("ctrl", "z")),
-        CommandShortcut(R.string.shortcut_save, GestoIcons.Save, listOf("ctrl", "s")),
-        CommandShortcut(R.string.shortcut_close, GestoIcons.Close, listOf("super", "q")),
-        CommandShortcut(R.string.shortcut_terminal, GestoIcons.Terminal, listOf("super", "enter")),
-        CommandShortcut(R.string.shortcut_launcher, GestoIcons.Launcher, listOf("super", "space")),
-        CommandShortcut(R.string.shortcut_esc, GestoIcons.Escape, listOf("esc")),
+        CommandShortcut(R.string.shortcut_copy, GestoIcons.Copy, listOf("ctrl", "c"), R.string.notice_shortcut_copy),
+        CommandShortcut(R.string.shortcut_paste, GestoIcons.Paste, listOf("ctrl", "v"), R.string.notice_shortcut_paste),
+        CommandShortcut(R.string.shortcut_undo, GestoIcons.Undo, listOf("ctrl", "z"), R.string.notice_shortcut_undo),
+        CommandShortcut(R.string.shortcut_save, GestoIcons.Save, listOf("ctrl", "s"), R.string.notice_shortcut_save),
+        CommandShortcut(R.string.shortcut_close, GestoIcons.Close, listOf("super", "q"), R.string.notice_shortcut_close),
+        CommandShortcut(R.string.shortcut_terminal, GestoIcons.Terminal, listOf("super", "enter"), R.string.notice_shortcut_terminal),
+        CommandShortcut(R.string.shortcut_launcher, GestoIcons.Launcher, listOf("super", "space"), R.string.notice_shortcut_launcher),
+        CommandShortcut(R.string.shortcut_esc, GestoIcons.Escape, listOf("esc"), R.string.notice_shortcut_esc),
     )
 }
 
@@ -57,6 +63,18 @@ fun CommandsScreen(
     modifier: Modifier = Modifier,
 ) {
     val spacing = GestoTheme.spacing
+    var askSuspend by rememberSaveable { mutableStateOf(false) }
+    if (askSuspend) {
+        val pc = state.hostName.ifBlank { stringResource(R.string.commands_this_pc) }
+        GestoDialog(
+            title = stringResource(R.string.commands_suspend_title, pc),
+            confirmText = stringResource(R.string.commands_suspend_confirm),
+            onConfirm = { askSuspend = false; actions.onSystem("suspend") },
+            dismissText = stringResource(R.string.commands_cancel),
+            onDismiss = { askSuspend = false },
+            destructive = true,
+        )
+    }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -72,14 +90,14 @@ fun CommandsScreen(
                     description = stringResource(R.string.commands_previous),
                     onClick = { actions.onMedia("previous") },
                     enabled = state.mediaSupported,
-                    modifier = Modifier.weight(1f).height58(),
+                    modifier = Modifier.weight(1f).clickHeight(),
                 )
                 GestoButton(
                     text = stringResource(R.string.commands_play_pause),
                     icon = GestoIcons.Play,
                     onClick = { actions.onMedia("play_pause") },
                     enabled = state.mediaSupported,
-                    modifier = Modifier.weight(2f).height58(),
+                    modifier = Modifier.weight(2f).clickHeight(),
                 )
                 GestoTileButton(
                     text = "",
@@ -87,7 +105,7 @@ fun CommandsScreen(
                     description = stringResource(R.string.commands_next),
                     onClick = { actions.onMedia("next") },
                     enabled = state.mediaSupported,
-                    modifier = Modifier.weight(1f).height58(),
+                    modifier = Modifier.weight(1f).clickHeight(),
                 )
             }
         }
@@ -95,15 +113,15 @@ fun CommandsScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
                 GestoTileButton(
                     stringResource(R.string.commands_quieter), { actions.onVolume("down") },
-                    Modifier.weight(1f).height58(), state.volumeSupported, GestoIcons.Minus,
+                    Modifier.weight(1f).clickHeight(), state.volumeSupported, GestoIcons.Minus,
                 )
                 GestoTileButton(
                     stringResource(R.string.commands_mute), { actions.onVolume("mute_toggle") },
-                    Modifier.weight(1f).height58(), state.volumeSupported, GestoIcons.Mute,
+                    Modifier.weight(1f).clickHeight(), state.volumeSupported, GestoIcons.Mute,
                 )
                 GestoTileButton(
                     stringResource(R.string.commands_louder), { actions.onVolume("up") },
-                    Modifier.weight(1f).height58(), state.volumeSupported, GestoIcons.Plus,
+                    Modifier.weight(1f).clickHeight(), state.volumeSupported, GestoIcons.Plus,
                 )
             }
         }
@@ -111,11 +129,11 @@ fun CommandsScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
                 GestoTileButton(
                     stringResource(R.string.commands_dimmer), { actions.onBrightness("down") },
-                    Modifier.weight(1f).height58(), state.brightnessSupported, GestoIcons.Minus,
+                    Modifier.weight(1f).clickHeight(), state.brightnessSupported, GestoIcons.Minus,
                 )
                 GestoTileButton(
                     stringResource(R.string.commands_brighter), { actions.onBrightness("up") },
-                    Modifier.weight(1f).height58(), state.brightnessSupported, GestoIcons.Plus,
+                    Modifier.weight(1f).clickHeight(), state.brightnessSupported, GestoIcons.Plus,
                 )
             }
         }
@@ -127,7 +145,7 @@ fun CommandsScreen(
                             GestoQuickTile(
                                 text = stringResource(shortcut.label),
                                 icon = shortcut.icon,
-                                onClick = { actions.onShortcut(shortcut.keys) },
+                                onClick = { actions.onShortcut(shortcut.keys, shortcut.notice) },
                                 modifier = Modifier.weight(1f),
                                 enabled = state.shortcutsSupported,
                                 height = spacing.commandKeyHeight,
@@ -162,6 +180,7 @@ fun CommandsScreen(
                 )
                 if (!state.lockSupported) Reason(stringResource(R.string.commands_unavailable))
                 HoldToConfirmButton(
+                    onActivate = { askSuspend = true },
                     text = stringResource(R.string.commands_hold_suspend),
                     icon = GestoIcons.Moon,
                     onConfirmed = { actions.onSystem("suspend") },
@@ -174,7 +193,7 @@ fun CommandsScreen(
 }
 
 @Composable
-private fun Modifier.height58(): Modifier = this.then(Modifier.height(GestoTheme.spacing.clickButtonHeight))
+private fun Modifier.clickHeight(): Modifier = height(GestoTheme.spacing.clickButtonHeight)
 
 /** A small uppercase label, the content below it, and the reason line when the whole group is off. */
 @Composable

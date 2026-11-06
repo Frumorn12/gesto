@@ -140,6 +140,8 @@ data class ControlsUiState(
     val brightnessSupported: Boolean = false,
     /** Shortcuts go through the PC's keyboard, so they need input. */
     val shortcutsSupported: Boolean = false,
+    /** The PC's name, for the "Suspend <PC>?" question. */
+    val hostName: String = "",
     val lockSupported: Boolean = false,
     val suspendSupported: Boolean = false,
     /** Apps the PC offers; the section is hidden when empty. */

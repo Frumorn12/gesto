@@ -1,5 +1,6 @@
 package it.frumorn.gesto
 
+import androidx.annotation.StringRes
 import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -1612,10 +1613,10 @@ class GestoViewModel(
         emitNotice(Notice(UiText.Res(if (action == "suspend") R.string.notice_pc_suspending else R.string.notice_pc_locked)))
     }
 
-    /** A shortcut tapped on the Commands screen; the short notice that follows names its keys ("Ctrl+C"). */
-    fun shortcut(keys: List<String>) = launchCommand(null) {
+    /** A shortcut tapped on the Commands screen; [notice] is the string resource of the short message after it. */
+    fun shortcut(keys: List<String>, @StringRes notice: Int) = launchCommand(null) {
         client.shortcut(*keys.toTypedArray())
-        emitNotice(Notice(UiText.Res(R.string.notice_shortcut_sent, listOf(keys.joinToString("+") { it.replaceFirstChar(Char::uppercase) }))))
+        emitNotice(Notice(UiText.Res(notice)))
     }
 
     /** Starts one of the apps the PC offers (`capabilities.apps`). */
