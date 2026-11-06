@@ -1503,6 +1503,11 @@ class GestoViewModel(
 
     fun shortcut(vararg keys: String) = launchCommand(null) { client.shortcut(*keys) }
 
+    /** One key press with its modifiers held, from the keyboard sheet; names as the daemon knows them. */
+    fun sendKey(keys: List<String>) {
+        if (keys.isNotEmpty()) shortcut(*keys.toTypedArray())
+    }
+
     fun media(action: String) = launchCommand(null) { client.media(action) }
 
     fun volume(action: String) = launchCommand(null) { client.volume(action) }
@@ -2145,13 +2150,13 @@ class GestoViewModel(
             }
             RemoteInputCommand.ReleasePointerButtons -> {
                 Log.d(TAG, "transport_send type=release_pointer_buttons")
+                // Queued at the end of every touchpad gesture: what is left of a pixel is not carried into the next one.
+                pointerCarry.reset()
                 sendInput("release_pointer_buttons") {
                     client.pointerButton(PointerButton.Left, ButtonState.Released)
                     client.pointerButton(PointerButton.Right, ButtonState.Released)
                     client.pointerButton(PointerButton.Middle, ButtonState.Released)
                 }
-                // Queued at the end of every touchpad gesture: what is left of a pixel is not carried into the next one.
-                pointerCarry.reset()
             }
             RemoteInputCommand.Ping -> {
                 Log.v(TAG, "transport_send type=ping")

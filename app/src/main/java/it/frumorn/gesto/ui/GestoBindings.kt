@@ -127,7 +127,7 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
         ),
         keyboard = KeyboardActions(
             onKeyboardEdit = viewModel::sendLiveKeyboardEdit,
-            onShortcut = { keys -> viewModel.shortcut(*keys.toTypedArray()) },
+            onKey = viewModel::sendKey,
         ),
         controls = ControlsActions(
             onMedia = viewModel::media,

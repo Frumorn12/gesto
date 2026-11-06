@@ -328,7 +328,7 @@ private fun BoxScope.KeyboardSheetHost(open: Boolean, onClose: () -> Unit, conte
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        stringResource(R.string.dock_keyboard),
+                        stringResource(R.string.keyboard_sheet_title),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),

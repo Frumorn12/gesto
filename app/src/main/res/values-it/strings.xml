@@ -55,6 +55,20 @@
     <string name="dock_commands">Comandi</string>
 
     <string name="keyboard_close">Chiudi la tastiera</string>
+    <string name="keyboard_sheet_title">Tastiera · i tasti premuti restano attivi per il prossimo</string>
+    <string name="keyboard_type_here">Scrivi qui, va sul PC</string>
+    <string name="key_ctrl">Ctrl</string>
+    <string name="key_alt">Alt</string>
+    <string name="key_super">Super</string>
+    <string name="key_shift">Maiusc</string>
+    <string name="key_esc">Esc</string>
+    <string name="key_tab">Tab</string>
+    <string name="key_enter">Invio</string>
+    <string name="key_backspace">Cancella</string>
+    <string name="key_left">Freccia sinistra</string>
+    <string name="key_up">Freccia su</string>
+    <string name="key_down">Freccia giù</string>
+    <string name="key_right">Freccia destra</string>
 
     <string name="touchpad_pc_screen">schermo PC</string>
     <string name="touchpad_cursor_hint">Dove si trova il puntatore sul PC, più o meno</string>

@@ -50,7 +50,7 @@ import it.frumorn.gesto.ui.screens.ControlsScreen
 import it.frumorn.gesto.ui.screens.AddPcScreen
 import it.frumorn.gesto.ui.screens.addPcTitle
 import it.frumorn.gesto.ui.screens.HomeScreen
-import it.frumorn.gesto.ui.screens.KeyboardScreen
+import it.frumorn.gesto.ui.session.KeyboardSheet
 import it.frumorn.gesto.ui.screens.LaunchScreen
 import it.frumorn.gesto.ui.screens.RemoteDisplayScreen
 import it.frumorn.gesto.ui.screens.RemoteDisplayVideoSurface
@@ -208,8 +208,7 @@ private fun SessionPage(
         state = session,
         actions = actions.session,
         onDockHeightChanged = onDockHeightChanged,
-        // Until the new keyboard sheet arrives, the old keyboard screen lives in the sheet.
-        keyboardSheet = { KeyboardScreen(actions.keyboard) },
+        keyboardSheet = { KeyboardSheet(actions.keyboard) },
     ) {
         AnimatedContent(
             targetState = last.value,

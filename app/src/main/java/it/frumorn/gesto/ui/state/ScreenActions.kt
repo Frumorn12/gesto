@@ -91,7 +91,8 @@ data class RemoteDisplayActions(
 @Immutable
 data class KeyboardActions(
     val onKeyboardEdit: (previous: String, next: String) -> Unit = { _, _ -> },
-    val onShortcut: (List<String>) -> Unit = {},
+    /** One key with its modifiers, by daemon key names (`["ctrl", "c"]`, `["left"]`). */
+    val onKey: (List<String>) -> Unit = {},
 )
 
 @Immutable

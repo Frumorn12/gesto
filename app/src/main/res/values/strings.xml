@@ -55,6 +55,20 @@
     <string name="dock_commands">Commands</string>
 
     <string name="keyboard_close">Close the keyboard</string>
+    <string name="keyboard_sheet_title">Keyboard · pressed keys stay on for the next one</string>
+    <string name="keyboard_type_here">Type here, it goes to the PC</string>
+    <string name="key_ctrl">Ctrl</string>
+    <string name="key_alt">Alt</string>
+    <string name="key_super">Super</string>
+    <string name="key_shift">Shift</string>
+    <string name="key_esc">Esc</string>
+    <string name="key_tab">Tab</string>
+    <string name="key_enter">Enter</string>
+    <string name="key_backspace">Backspace</string>
+    <string name="key_left">Left arrow</string>
+    <string name="key_up">Up arrow</string>
+    <string name="key_down">Down arrow</string>
+    <string name="key_right">Right arrow</string>
 
     <string name="touchpad_pc_screen">PC screen</string>
     <string name="touchpad_cursor_hint">Where the pointer is on the PC, roughly</string>
