@@ -22,6 +22,7 @@ import it.frumorn.gesto.core.model.Notice
 import it.frumorn.gesto.core.model.NoticeAction
 import it.frumorn.gesto.core.model.shouldEmitNotice
 import it.frumorn.gesto.core.model.PointerButton
+import it.frumorn.gesto.core.model.RemoteApp
 import it.frumorn.gesto.core.model.RemoteScreenConnectionState
 import it.frumorn.gesto.core.model.ScreenSource
 import it.frumorn.gesto.core.model.ScreenStreamInfo
@@ -1595,8 +1596,6 @@ class GestoViewModel(
         }
     }
 
-    fun shortcut(vararg keys: String) = launchCommand(null) { client.shortcut(*keys) }
-
     /** One key press with its modifiers held, from the keyboard sheet; names as the daemon knows them. */
     fun sendKey(keys: List<String>) {
         if (keys.isNotEmpty()) keyboardQueue.trySend { client.shortcut(*keys.toTypedArray()) }
@@ -1608,7 +1607,22 @@ class GestoViewModel(
 
     fun brightness(action: String) = launchCommand(null) { client.brightness(action) }
 
-    fun system(action: String) = launchCommand(null) { client.system(action) }
+    fun system(action: String) = launchCommand(null) {
+        client.system(action)
+        emitNotice(Notice(UiText.Res(if (action == "suspend") R.string.notice_pc_suspending else R.string.notice_pc_locked)))
+    }
+
+    /** A shortcut tapped on the Commands screen; the short notice that follows names its keys ("Ctrl+C"). */
+    fun shortcut(keys: List<String>) = launchCommand(null) {
+        client.shortcut(*keys.toTypedArray())
+        emitNotice(Notice(UiText.Res(R.string.notice_shortcut_sent, listOf(keys.joinToString("+") { it.replaceFirstChar(Char::uppercase) }))))
+    }
+
+    /** Starts one of the apps the PC offers (`capabilities.apps`). */
+    fun launchApp(app: RemoteApp) = launchCommand(null) {
+        client.launchApp(app.id)
+        emitNotice(Notice(UiText.Res(R.string.notice_app_starting, listOf(app.name))))
+    }
 
     fun clipboard(text: String) = launchCommand("Sending clipboard text...") { client.clipboard(text) }
 

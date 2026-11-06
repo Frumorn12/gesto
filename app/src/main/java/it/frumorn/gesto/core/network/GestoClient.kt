@@ -5,6 +5,7 @@ import it.frumorn.gesto.core.externalinput.ExternalInputEvent
 import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.CapabilitySummary
 import it.frumorn.gesto.core.model.PointerButton
+import it.frumorn.gesto.core.model.RemoteApp
 import it.frumorn.gesto.core.model.ScreenSource
 import it.frumorn.gesto.core.model.ScreenStreamInfo
 import it.frumorn.gesto.core.model.TrustedHost
@@ -237,6 +238,11 @@ class GestoClient {
         command("system", JSONObject().put("action", action))
     }
 
+    /** Starts the app the PC offers under [id]; an id it doesn't know comes back as `unknown_app`. */
+    suspend fun launchApp(id: String) {
+        command("launch_app", JSONObject().put("id", id))
+    }
+
     suspend fun clipboard(text: String) {
         command("clipboard_set", JSONObject().put("text", text))
     }
@@ -467,7 +473,7 @@ private fun JSONObject.toApiException() = GestoApiException(
     retryable = optBoolean("retryable", false),
 )
 
-private fun JSONObject?.toCapabilitySummary(): CapabilitySummary {
+internal fun JSONObject?.toCapabilitySummary(): CapabilitySummary {
     if (this == null) return CapabilitySummary()
     val input = optJSONObject("input")
     val external = optJSONObject("external_input")
@@ -501,7 +507,17 @@ private fun JSONObject?.toCapabilitySummary(): CapabilitySummary {
         clipboard = system?.optBoolean("clipboard") ?: false,
         lock = system?.optBoolean("lock") ?: false,
         suspend = system?.optBoolean("suspend") ?: false,
+        apps = optJSONArray("apps").toRemoteApps(),
     )
+}
+
+private fun JSONArray?.toRemoteApps(): List<RemoteApp> {
+    if (this == null) return emptyList()
+    return (0 until length()).mapNotNull { index ->
+        val app = optJSONObject(index) ?: return@mapNotNull null
+        val id = app.optString("id").trim()
+        if (id.isEmpty()) null else RemoteApp(id, app.optString("name").trim().ifEmpty { id })
+    }
 }
 
 private fun JSONObject.toScreenSource(): ScreenSource = ScreenSource(

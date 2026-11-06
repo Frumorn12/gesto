@@ -34,6 +34,9 @@ const val MAX_PC_NAME_LENGTH = 40
 val TrustedHost.label: String
     get() = displayName ?: hostName
 
+/** An app or script the PC offers to start, by the id set in Gesto's configuration there. */
+data class RemoteApp(val id: String, val name: String)
+
 data class CapabilitySummary(
     val inputSupported: Boolean = false,
     val inputReason: String = "Not connected",
@@ -60,6 +63,8 @@ data class CapabilitySummary(
     val clipboard: Boolean = false,
     val lock: Boolean = false,
     val suspend: Boolean = false,
+    /** What the PC lets the phone launch; empty when nothing is configured. */
+    val apps: List<RemoteApp> = emptyList(),
 )
 
 data class ScreenSource(

@@ -171,4 +171,35 @@
     <string name="qr_permission_denied">Camera access was denied. Allow it to scan the QR.</string>
     <string name="qr_allow_camera">Allow the camera</string>
     <string name="qr_camera_failed">The camera didn\'t start.</string>
+    <!-- Commands -->
+    <string name="commands_media">Music and video</string>
+    <string name="commands_previous">Previous</string>
+    <string name="commands_next">Next</string>
+    <string name="commands_play_pause">Play / Pause</string>
+    <string name="commands_volume">Volume</string>
+    <string name="commands_quieter">Quieter</string>
+    <string name="commands_louder">Louder</string>
+    <string name="commands_mute">Mute</string>
+    <string name="commands_brightness">Brightness</string>
+    <string name="commands_dimmer">Dimmer</string>
+    <string name="commands_brighter">Brighter</string>
+    <string name="commands_shortcuts">Shortcuts</string>
+    <string name="commands_apps">Apps on the PC</string>
+    <string name="commands_system">System</string>
+    <string name="commands_lock">Lock</string>
+    <string name="commands_hold_suspend">Hold to suspend</string>
+    <string name="commands_unavailable">Not available on this PC</string>
+    <string name="commands_suspend_off">Turn on allow_suspend in Gesto\'s settings on the PC</string>
+    <string name="shortcut_copy">Copy</string>
+    <string name="shortcut_paste">Paste</string>
+    <string name="shortcut_undo">Undo</string>
+    <string name="shortcut_save">Save</string>
+    <string name="shortcut_close">Close</string>
+    <string name="shortcut_terminal">Terminal</string>
+    <string name="shortcut_launcher">Launcher</string>
+    <string name="shortcut_esc">Esc</string>
+    <string name="notice_shortcut_sent">Sent %1$s</string>
+    <string name="notice_app_starting">Starting %1$s on the PC</string>
+    <string name="notice_pc_locked">PC locked</string>
+    <string name="notice_pc_suspending">PC going to sleep</string>
 </resources>

@@ -5,6 +5,7 @@ import it.frumorn.gesto.SessionMode
 import it.frumorn.gesto.core.input.PointerDelta
 import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.PointerButton
+import it.frumorn.gesto.core.model.RemoteApp
 import it.frumorn.gesto.core.model.StreamProfile
 import it.frumorn.gesto.ui.navigation.QuickMenuEntry
 
@@ -111,6 +112,9 @@ data class ControlsActions(
     val onVolume: (String) -> Unit = {},
     val onBrightness: (String) -> Unit = {},
     val onSystem: (String) -> Unit = {},
+    /** One shortcut by daemon key names (`["ctrl", "c"]`). */
+    val onShortcut: (List<String>) -> Unit = {},
+    val onLaunchApp: (RemoteApp) -> Unit = {},
 )
 
 @Immutable

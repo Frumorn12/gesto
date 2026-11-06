@@ -141,6 +141,8 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
             onVolume = viewModel::volume,
             onBrightness = viewModel::brightness,
             onSystem = viewModel::system,
+            onShortcut = viewModel::shortcut,
+            onLaunchApp = viewModel::launchApp,
         ),
         settings = SettingsActions(
             onSelectProfile = viewModel::setStreamProfile,
@@ -253,7 +255,10 @@ internal fun GestoUiState.toControlsState(): ControlsUiState = ControlsUiState(
     mediaSupported = capabilities.media,
     volumeSupported = capabilities.volume,
     brightnessSupported = capabilities.brightness,
-    systemSupported = capabilities.lock || capabilities.suspend,
+    shortcutsSupported = capabilities.inputSupported,
+    lockSupported = capabilities.lock,
+    suspendSupported = capabilities.suspend,
+    apps = capabilities.apps,
 )
 
 internal fun GestoUiState.toSettingsState(): SettingsUiState = SettingsUiState(

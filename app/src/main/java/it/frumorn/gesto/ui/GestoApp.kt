@@ -49,7 +49,7 @@ import it.frumorn.gesto.isSession
 import it.frumorn.gesto.remoteScreenFullscreen
 import it.frumorn.gesto.ui.components.GestoPageBar
 import it.frumorn.gesto.ui.navigation.ScreensCapturingExternalPointer
-import it.frumorn.gesto.ui.screens.ControlsScreen
+import it.frumorn.gesto.ui.screens.CommandsScreen
 import it.frumorn.gesto.ui.screens.AddPcScreen
 import it.frumorn.gesto.ui.screens.addPcTitle
 import it.frumorn.gesto.ui.screens.HomeScreen
@@ -236,7 +236,7 @@ private fun SessionPage(
                         actions = actions.remoteDisplay,
                         videoSurface = videoSurface,
                     )
-                    Screen.Commands -> ControlsScreen(state.toControlsState(), actions.controls)
+                    Screen.Commands -> CommandsScreen(state.toControlsState(), actions.controls)
                     else -> Unit
                 }
             }

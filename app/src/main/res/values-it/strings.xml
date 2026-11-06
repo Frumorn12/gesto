@@ -165,4 +165,35 @@
     <string name="qr_permission_denied">Accesso alla fotocamera negato. Consentilo per inquadrare il QR.</string>
     <string name="qr_allow_camera">Consenti la fotocamera</string>
     <string name="qr_camera_failed">La fotocamera non si è avviata.</string>
+    <!-- Comandi -->
+    <string name="commands_media">Musica e video</string>
+    <string name="commands_previous">Precedente</string>
+    <string name="commands_next">Successivo</string>
+    <string name="commands_play_pause">Play / Pausa</string>
+    <string name="commands_volume">Volume</string>
+    <string name="commands_quieter">Più basso</string>
+    <string name="commands_louder">Più alto</string>
+    <string name="commands_mute">Muto</string>
+    <string name="commands_brightness">Luminosità</string>
+    <string name="commands_dimmer">Meno</string>
+    <string name="commands_brighter">Più</string>
+    <string name="commands_shortcuts">Scorciatoie</string>
+    <string name="commands_apps">App sul PC</string>
+    <string name="commands_system">Sistema</string>
+    <string name="commands_lock">Blocca</string>
+    <string name="commands_hold_suspend">Tieni per sospendere</string>
+    <string name="commands_unavailable">Non disponibile su questo PC</string>
+    <string name="commands_suspend_off">Attiva allow_suspend nella configurazione di Gesto sul PC</string>
+    <string name="shortcut_copy">Copia</string>
+    <string name="shortcut_paste">Incolla</string>
+    <string name="shortcut_undo">Annulla</string>
+    <string name="shortcut_save">Salva</string>
+    <string name="shortcut_close">Chiudi</string>
+    <string name="shortcut_terminal">Terminale</string>
+    <string name="shortcut_launcher">Launcher</string>
+    <string name="shortcut_esc">Esc</string>
+    <string name="notice_shortcut_sent">Inviato %1$s</string>
+    <string name="notice_app_starting">Avvio di %1$s sul PC</string>
+    <string name="notice_pc_locked">PC bloccato</string>
+    <string name="notice_pc_suspending">Il PC va in sospensione</string>
 </resources>

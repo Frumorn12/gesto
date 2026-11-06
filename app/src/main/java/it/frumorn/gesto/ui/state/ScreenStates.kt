@@ -5,6 +5,7 @@ import it.frumorn.gesto.AddPcStep
 import it.frumorn.gesto.SessionMode
 import it.frumorn.gesto.core.externalinput.ExternalInputDeviceSummary
 import it.frumorn.gesto.core.model.CapabilitySummary
+import it.frumorn.gesto.core.model.RemoteApp
 import it.frumorn.gesto.core.model.ScreenStreamStats
 import it.frumorn.gesto.core.model.StreamProfile
 import it.frumorn.gesto.core.model.StreamSettings
@@ -137,7 +138,12 @@ data class ControlsUiState(
     val mediaSupported: Boolean = false,
     val volumeSupported: Boolean = false,
     val brightnessSupported: Boolean = false,
-    val systemSupported: Boolean = false,
+    /** Shortcuts go through the PC's keyboard, so they need input. */
+    val shortcutsSupported: Boolean = false,
+    val lockSupported: Boolean = false,
+    val suspendSupported: Boolean = false,
+    /** Apps the PC offers; the section is hidden when empty. */
+    val apps: List<RemoteApp> = emptyList(),
 )
 
 @Immutable

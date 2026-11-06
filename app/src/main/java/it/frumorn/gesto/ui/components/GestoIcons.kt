@@ -68,6 +68,23 @@ object GestoIcons {
     /** A pencil: type something in. */
     val Edit: ImageVector by lazy { lineIcon("Edit", "M4 20h4L19 9l-4-4L4 16z", "M13 7l4 4") }
     val Chevron: ImageVector by lazy { lineIcon("Chevron", "M9 5l7 7-7 7") }
+    val Play: ImageVector by lazy { lineIcon("Play", "M8 5l11 7-11 7z", "M5 5v14") }
+    val Previous: ImageVector by lazy { lineIcon("Previous", "M18 5L8 12l10 7z", "M6 5v14") }
+    val Next: ImageVector by lazy { lineIcon("Next", "M6 5l10 7-10 7z", "M18 5v14") }
+    val Minus: ImageVector by lazy { lineIcon("Minus", "M5 12h14") }
+    val Brightness: ImageVector by lazy {
+        lineIcon("Brightness", rect(8, 8, 8, 8), "M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2")
+    }
+    val Copy: ImageVector by lazy { lineIcon("Copy", rect(8, 8, 12, 12), "M16 8V4H4v12h4") }
+    val Paste: ImageVector by lazy { lineIcon("Paste", rect(5, 5, 14, 16), rect(9, 3, 6, 4)) }
+    val Undo: ImageVector by lazy { lineIcon("Undo", "M9 6L4 11l5 5", "M4 11h10a5 5 0 0 1 0 10h-3") }
+    val Save: ImageVector by lazy { lineIcon("Save", "M4 4h13l3 3v13H4z", rect(8, 4, 8, 5), rect(7, 13, 10, 7)) }
+    val Terminal: ImageVector by lazy { lineIcon("Terminal", rect(3, 4, 18, 16), "M7 9l3 3-3 3M13 15h4") }
+    val Launcher: ImageVector by lazy { lineIcon("Launcher", "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z", "M16 16l5 5") }
+    val Escape: ImageVector by lazy { lineIcon("Escape", rect(3, 6, 18, 12), "M8 10l2 2-2 2M13 14h3") }
+    val Lock: ImageVector by lazy { lineIcon("Lock", rect(5, 11, 14, 9), "M8 11V7a4 4 0 0 1 8 0v4") }
+    val Moon: ImageVector by lazy { lineIcon("Moon", "M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z") }
+    val Apps: ImageVector by lazy { lineIcon("Apps", rect(4, 4, 6, 6), rect(14, 4, 6, 6), rect(4, 14, 6, 6), "M14 17h6M17 14v6") }
     /** An arrow up and an arrow down: drag here to scroll. */
     val ScrollVertical: ImageVector by lazy { lineIcon("ScrollVertical", "M12 4v16", "M8 8l4-4 4 4", "M8 16l4 4 4-4") }
 }

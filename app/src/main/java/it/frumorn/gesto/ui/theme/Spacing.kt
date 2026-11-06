@@ -86,6 +86,9 @@ data class GestoSpacing(
     /** The three quick tiles under the remote screen (Right click, Keyboard, Audio). */
     val quickTileHeight: Dp = 52.dp
 
+    /** A shortcut key on the Commands screen, and the hold-to-suspend button. */
+    val commandKeyHeight: Dp = 62.dp
+
     /** The phone icon of the "turn the phone" hint. */
     val rotateIconSize: Dp = 26.dp
 
