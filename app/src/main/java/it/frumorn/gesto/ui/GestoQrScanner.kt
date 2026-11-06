@@ -43,7 +43,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.isTraversalGroup
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -110,7 +113,16 @@ fun GestoQrScannerOverlay(
     Box(
         modifier
             .fillMaxSize()
-            .background(GestoVideoLetterbox),
+            .background(GestoVideoLetterbox)
+            // The page underneath must not be touched through the camera (or its permission
+            // page): a found PC there would start a pairing. Taps on the overlay's own buttons
+            // reach them first.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) awaitPointerEvent().changes.forEach { it.consume() }
+                }
+            }
+            .semantics { isTraversalGroup = true },
     ) {
         if (hasPermission) {
             CameraQrPreview(

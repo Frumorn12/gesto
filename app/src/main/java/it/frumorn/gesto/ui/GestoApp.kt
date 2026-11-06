@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -254,8 +255,11 @@ private fun SessionPage(
 @Composable
 private fun PlainPage(page: Screen, state: GestoUiState, actions: GestoActions) {
     val back: () -> Unit = { actions.onBack() }
+    // Under the camera the page is neither touchable (see the overlay) nor read out by TalkBack.
+    val qrOpen = page == Screen.AddPc && state.addPcStep == AddPcStep.Qr
     Box(Modifier.fillMaxSize()) {
         Scaffold(
+            modifier = if (qrOpen) Modifier.clearAndSetSemantics {} else Modifier,
             // Transparent so the Box background shows through; contentColorFor(Transparent) is
             // Unspecified, so the content colour is provided explicitly.
             containerColor = Color.Transparent,
