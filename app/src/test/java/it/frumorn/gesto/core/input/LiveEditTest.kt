@@ -19,8 +19,10 @@ class LiveEditTest {
 
     @Test fun typing_from_empty() = assertEquals(LiveEdit(0, "hi"), liveEditOps("", "hi"))
 
+    @Test fun deleting_one_emoji_is_one_backspace() = assertEquals(LiveEdit(1, ""), liveEditOps("a\uD83D\uDE00", "a"))
+
     @Test fun an_emoji_is_not_cut_in_half() {
         // "a😀" -> "a😁": both emoji share the high surrogate.
-        assertEquals(LiveEdit(2, "😁"), liveEditOps("a😀", "a😁"))
+        assertEquals(LiveEdit(1, "\uD83D\uDE01"), liveEditOps("a\uD83D\uDE00", "a\uD83D\uDE01"))
     }
 }

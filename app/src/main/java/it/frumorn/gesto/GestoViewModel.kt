@@ -264,9 +264,16 @@ class GestoViewModel(
     /** Fractions of a pixel the touchpad moves left behind, sent with the next move. */
     private val pointerCarry = SubPixelCarry()
 
+    /**
+     * Live typing and keys from the keyboard sheet go through one queue and one consumer, so the
+     * backspaces and text of edit N are all sent before edit N+1 starts, in the order typed.
+     */
+    private val keyboardQueue = Channel<suspend () -> Unit>(Channel.UNLIMITED)
+
     init {
         observeVideoSession()
         viewModelScope.launch { drainInputCommands() }
+        viewModelScope.launch { for (job in keyboardQueue) runQuiet(job) }
         viewModelScope.launch { runHealthPing() }
         viewModelScope.launch {
             settingsRepo.streamSettings.collect { settings ->
@@ -1487,7 +1494,7 @@ class GestoViewModel(
     fun sendLiveKeyboardEdit(previous: String, next: String) {
         val edit = liveEditOps(previous, next)
         if (edit.isEmpty) return
-        launchQuiet {
+        keyboardQueue.trySend {
             repeat(edit.backspaces) { client.shortcut("backspace") }
             if (edit.insert.isNotEmpty()) client.text(edit.insert)
         }
@@ -1497,7 +1504,7 @@ class GestoViewModel(
 
     /** One key press with its modifiers held, from the keyboard sheet; names as the daemon knows them. */
     fun sendKey(keys: List<String>) {
-        if (keys.isNotEmpty()) shortcut(*keys.toTypedArray())
+        if (keys.isNotEmpty()) keyboardQueue.trySend { client.shortcut(*keys.toTypedArray()) }
     }
 
     fun media(action: String) = launchCommand(null) { client.media(action) }
@@ -1862,18 +1869,20 @@ class GestoViewModel(
     }
 
     private fun launchQuiet(block: suspend () -> Unit) {
-        viewModelScope.launch {
-            runCatching { block() }
-                .onFailure { throwable ->
-                    if (throwable is CancellationException) throw throwable
-                    if (throwable.isTransportFailure()) {
-                        Log.w(TAG, "transport_failure quiet_command reconnecting=true", throwable)
-                        reconnectCurrentHost()
-                    } else {
-                        reportCommandFailure(throwable)
-                    }
+        viewModelScope.launch { runQuiet(block) }
+    }
+
+    private suspend fun runQuiet(block: suspend () -> Unit) {
+        runCatching { block() }
+            .onFailure { throwable ->
+                if (throwable is CancellationException) throw throwable
+                if (throwable.isTransportFailure()) {
+                    Log.w(TAG, "transport_failure quiet_command reconnecting=true", throwable)
+                    reconnectCurrentHost()
+                } else {
+                    reportCommandFailure(throwable)
                 }
-        }
+            }
     }
 
     /** A failed command never touches the connection state: the user just gets a message. */

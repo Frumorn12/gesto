@@ -16,5 +16,6 @@ fun liveEditOps(previous: String, next: String): LiveEdit {
     while (prefix < limit && previous[prefix] == next[prefix]) prefix++
     // Never cut a surrogate pair (emoji) in two.
     if (prefix > 0 && prefix < previous.length && Character.isHighSurrogate(previous[prefix - 1])) prefix--
-    return LiveEdit(previous.length - prefix, next.substring(prefix))
+    // One Backspace per character the user sees, so an emoji (two UTF-16 units) is one.
+    return LiveEdit(previous.codePointCount(prefix, previous.length), next.substring(prefix))
 }
