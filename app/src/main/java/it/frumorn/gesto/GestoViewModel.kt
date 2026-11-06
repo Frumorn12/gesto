@@ -978,7 +978,7 @@ class GestoViewModel(
         val current = _state.value.streamSettings
         // Custom is reached through Advanced; picked directly it keeps what streams now.
         val custom = if (current.preset == QualityPreset.Custom) current else _state.value.streamingSettings
-        applyStreamSettings(preset.settings(custom = custom, showStats = current.showStats))
+        applyStreamSettings(preset.settings(custom = custom, showStats = current.showStats), userPick = true)
     }
 
     /** Advanced: own frames per second, which makes the quality Custom. */
@@ -996,12 +996,23 @@ class GestoViewModel(
         applyStreamSettings(QualityPreset.Custom.settings(custom = change(base), showStats = base.showStats))
     }
 
-    private fun applyStreamSettings(settings: StreamSettings) {
+    /**
+     * [userPick]: the user chose this preset, so choosing Automatic again starts it over from the
+     * best rung even when the preset does not change.
+     */
+    private fun applyStreamSettings(settings: StreamSettings, userPick: Boolean = false) {
         val before = _state.value
-        if (settings == before.streamSettings) return
+        val switched = settings.preset != before.streamSettings.preset
+        val toAuto = settings.preset == QualityPreset.Auto
+        var rung = before.autoQualityRung
+        if (switched || (userPick && toAuto)) {
+            autoQuality.onPresetSwitched(toAuto)
+            if (toAuto) rung = 0
+        }
+        if (settings == before.streamSettings && rung == before.autoQualityRung) return
         Log.i(TAG, "stream_settings preset=${settings.preset} fps=${settings.maxFps} quality=${settings.jpegQuality} max=${settings.maxDimension}")
-        _state.update { it.copy(streamSettings = settings) }
-        viewModelScope.launch { settingsRepo.saveStreamSettings(settings) }
+        _state.update { it.copy(streamSettings = settings, autoQualityRung = rung) }
+        if (settings != before.streamSettings) viewModelScope.launch { settingsRepo.saveStreamSettings(settings) }
         if (before.screenStreaming && _state.value.streamingSettings != before.streamingSettings) startScreenStream()
     }
 
@@ -1029,9 +1040,13 @@ class GestoViewModel(
             )
         }
         viewModelScope.launch { settingsRepo.saveGameMode(enabled, settings, before) }
+        if (settings.preset != current.streamSettings.preset) {
+            autoQuality.onPresetSwitched(settings.preset == QualityPreset.Auto)
+            if (settings.preset == QualityPreset.Auto) _state.update { it.copy(autoQualityRung = 0) }
+        }
         if (enabled) publishCurrentExternalDevices()
         emitNotice(Notice(UiText.Res(if (enabled) R.string.notice_game_mode_on else R.string.notice_game_mode_off)))
-        if (current.screenStreaming && settings.atRung(current.autoQualityRung) != current.streamingSettings) {
+        if (current.screenStreaming && settings.atRung(_state.value.autoQualityRung) != current.streamingSettings) {
             startScreenStream()
         }
     }

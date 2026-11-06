@@ -129,6 +129,38 @@ class AutoQualityControllerTest {
         assertNull(quick.onStats(10.0, 60, 1_000))
         assertEquals(1, quick.onStats(10.0, 60, 2_000))
     }
+
+    @Test
+    fun pickingAutoAgainStartsFromTheBestRung() {
+        feed(3, 40.0)
+        assertEquals(1, close(40.0))
+
+        controller.onPresetSwitched(toAuto = true)
+
+        assertEquals(0, controller.rung)
+    }
+
+    @Test
+    fun anyPresetSwitchForgetsTheBadWindowsCounted() {
+        assertTrue(feed(2, 40.0).all { it == null })
+
+        controller.onPresetSwitched(toAuto = false)
+
+        // Without the switch, this third slow window would have lowered the quality.
+        assertTrue(feed(1, 40.0).all { it == null })
+        assertNull(close(40.0))
+        assertEquals(0, controller.rung)
+    }
+
+    @Test
+    fun switchingToAnotherPresetKeepsTheRungUntilAutoIsPickedAgain() {
+        feed(3, 40.0)
+        assertEquals(1, close(40.0))
+
+        controller.onPresetSwitched(toAuto = false)
+
+        assertEquals(1, controller.rung)
+    }
 }
 
 class StreamDelayTest {

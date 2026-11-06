@@ -51,6 +51,14 @@ class AutoQualityController(
         badInARow = 0
     }
 
+    /**
+     * The user switched the quality preset (or picked Automatic again). The bad windows counted so
+     * far belong to the old choice; choosing Automatic also starts again from the best rung.
+     */
+    fun onPresetSwitched(toAuto: Boolean) {
+        if (toAuto) reset() else onStreamRestarted()
+    }
+
     /** Back to the first rung, with nothing counted: a new session. */
     fun reset() {
         onStreamRestarted()
