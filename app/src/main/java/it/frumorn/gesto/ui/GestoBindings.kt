@@ -44,7 +44,7 @@ import it.frumorn.gesto.ui.state.SessionUiState
 import it.frumorn.gesto.ui.state.SettingsActions
 import it.frumorn.gesto.ui.state.SettingsUiState
 import it.frumorn.gesto.ui.state.TouchpadActions
-import it.frumorn.gesto.ui.state.TouchpadInput
+import it.frumorn.gesto.ui.state.touchpadInput
 import it.frumorn.gesto.ui.state.TouchpadUiState
 import it.frumorn.gesto.ui.text.UiText
 
@@ -231,12 +231,11 @@ internal fun GestoUiState.toAddPcState(): AddPcUiState = AddPcUiState(
 )
 
 internal fun GestoUiState.toTouchpadState(): TouchpadUiState = TouchpadUiState(
-    input = when {
-        // Until the PC has answered, what it can do is not known yet.
-        connectionState == ConnectionState.Connected && !capabilities.inputSupported -> TouchpadInput.Blocked
-        capabilities.inputBackend == "wayland-portal" -> TouchpadInput.NeedsApproval
-        else -> TouchpadInput.Ready
-    },
+    input = touchpadInput(
+        connected = connectionState == ConnectionState.Connected,
+        capabilities = capabilities,
+        inputApproved = connectedHost?.fingerprint?.let { it in inputApprovedHosts } == true,
+    ),
     haptics = haptics,
     twoFingerRightClick = twoFingerRightClick,
     hints = touchpadHints,

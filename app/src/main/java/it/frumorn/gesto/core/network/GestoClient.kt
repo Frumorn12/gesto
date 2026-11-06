@@ -35,6 +35,13 @@ class GestoClient {
     /** The pairing being waited for; guarded by [channelLock]. */
     private val pairingAttempts = PairingAttempts<SecureChannel>()
 
+    /**
+     * Gets the PC's refusal of a one-way request (pointer, scroll, keys), which arrives later, on
+     * the IO thread, while another request reads its own answer.
+     */
+    @Volatile
+    var onOneWayError: ((GestoApiException) -> Unit)? = null
+
     /** Pairs with the 6-digit code `gesto pair` (or `waypad-daemon pair-code`) printed on the PC. */
     suspend fun pair(
         address: String,
@@ -173,8 +180,13 @@ class GestoClient {
         result
     } }
 
-    suspend fun prepareInput() {
-        command("prepare_input", timeoutMs = APPROVAL_TIMEOUT_MS)
+    /**
+     * Asks the PC to let the phone's input in (the RemoteDesktop portal asks its user once). True
+     * when the PC answered that its input is ready; a refusal is thrown as the daemon's error.
+     */
+    suspend fun prepareInput(): Boolean {
+        val data = command("prepare_input", timeoutMs = APPROVAL_TIMEOUT_MS)
+        return (data?.optString("status", "ready") ?: "ready") == "ready"
     }
 
     suspend fun ping() {
@@ -353,7 +365,12 @@ class GestoClient {
         ch.send(JSONObject().put("type", "command").put("request_id", id).put("command", command))
         oneWayResponseIds.addLast(id)
         while (oneWayResponseIds.size > MAX_ONE_WAY_POINTER_RESPONSES) {
-            ch.receiveResponse(oneWayResponseIds.removeFirst())
+            // The oldest answer belongs to a request sent long ago, not to this one.
+            try {
+                ch.receiveResponse(oneWayResponseIds.removeFirst())
+            } catch (e: GestoApiException) {
+                onOneWayError?.invoke(e)
+            }
         }
     } }
 
@@ -368,7 +385,7 @@ class GestoClient {
 
     private fun SecureChannel.receiveResponse(id: String, timeoutMs: Int = RESPONSE_TIMEOUT_MS): JSONObject =
         try {
-            matchResponse(id, oneWayResponseIds) { receive(timeoutMs) }
+            matchResponse(id, oneWayResponseIds, onEarlierError = { e -> onOneWayError?.invoke(e) }) { receive(timeoutMs) }
         } catch (e: java.net.SocketTimeoutException) {
             // A reply that arrives late would poison every later read: drop the whole channel so
             // the caller's reconnect starts from a clean stream.
@@ -449,14 +466,23 @@ class RequestMayHaveRunException(cause: Throwable) : java.io.IOException(cause.m
  * requests whose answer was never consumed) are skipped, though an error among them is thrown.
  * Any other id is a protocol error.
  */
-internal fun matchResponse(id: String, pendingIds: MutableCollection<String>, next: () -> JSONObject): JSONObject {
+internal fun matchResponse(
+    id: String,
+    pendingIds: MutableCollection<String>,
+    onEarlierError: (GestoApiException) -> Unit = {},
+    next: () -> JSONObject,
+): JSONObject {
     while (true) {
         val response = next()
         check(response.getString("type") == "response") { "Unexpected server message" }
         val responseId = response.getString("request_id")
         if (responseId != id) {
             if (pendingIds.remove(responseId)) {
-                if (!response.getBoolean("ok")) throw response.getJSONObject("error").toApiException()
+                // The refusal of an earlier one-way request (a pointer move the PC did not take) is
+                // not this request's answer: it is reported apart, and reading goes on to [id].
+                // Throwing here would leave [id]'s own response in the stream, and every later
+                // request would then read the one before it.
+                if (!response.getBoolean("ok")) onEarlierError(response.getJSONObject("error").toApiException())
                 continue
             }
             error("Response ID mismatch")
@@ -485,6 +511,7 @@ internal fun JSONObject?.toCapabilitySummary(): CapabilitySummary {
         inputSupported = input?.optBoolean("supported") ?: false,
         inputReason = input?.optString("reason", "No input capability data") ?: "No input capability data",
         inputBackend = input?.optString("backend", "unknown") ?: "unknown",
+        inputRequiresApproval = input?.optBoolean("requires_user_approval") ?: false,
         externalPointerSupported = external?.optBoolean("pointer") ?: (input?.optBoolean("supported") ?: false),
         externalKeyboardSupported = external?.optBoolean("keyboard") ?: (input?.optBoolean("supported") ?: false),
         externalControllerSupported = external?.optBoolean("controller") ?: false,

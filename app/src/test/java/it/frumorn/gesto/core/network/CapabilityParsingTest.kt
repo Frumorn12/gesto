@@ -3,6 +3,7 @@ package it.frumorn.gesto.core.network
 import it.frumorn.gesto.core.model.RemoteApp
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -34,5 +35,12 @@ class CapabilityParsingTest {
     @Test
     fun an_app_without_a_name_is_shown_by_its_id() {
         assertEquals(listOf(RemoteApp("kodi", "kodi")), parse("""{"apps":[{"id":"kodi"}]}""").apps)
+    }
+
+    @Test
+    fun reads_whether_input_waits_for_the_pcs_approval() {
+        assertTrue(parse("""{"input":{"supported":true,"backend":"wayland-portal","requires_user_approval":true}}""").inputRequiresApproval)
+        assertFalse(parse("""{"input":{"supported":true,"backend":"uinput","requires_user_approval":false}}""").inputRequiresApproval)
+        assertFalse(parse("""{"input":{"supported":true,"backend":"uinput"}}""").inputRequiresApproval)
     }
 }

@@ -41,6 +41,11 @@ data class CapabilitySummary(
     val inputSupported: Boolean = false,
     val inputReason: String = "Not connected",
     val inputBackend: String = "unknown",
+    /**
+     * The PC asks its user once (the RemoteDesktop portal) before it takes the phone's input; until
+     * then the daemon refuses pointer and keys.
+     */
+    val inputRequiresApproval: Boolean = false,
     val externalPointerSupported: Boolean = false,
     val externalKeyboardSupported: Boolean = false,
     val externalControllerSupported: Boolean = false,

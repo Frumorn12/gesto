@@ -22,6 +22,7 @@ object ErrorTranslator {
         if (chain.any { it.message?.contains("fingerprint changed", ignoreCase = true) == true }) {
             return UiText.Res(R.string.error_fingerprint_changed)
         }
+        if (isInputApprovalMissing(error)) return UiText.Res(R.string.error_input_not_approved)
         val api = chain.firstOrNull { it is GestoApiException } as? GestoApiException
         if (api != null) {
             val id = when (api.code) {
@@ -40,4 +41,16 @@ object ErrorTranslator {
         }
         return UiText.Res(R.string.error_generic, listOf(error.message ?: error::class.java.simpleName))
     }
+
+    /**
+     * The PC refused input because its RemoteDesktop portal has not approved this session yet.
+     * The daemon has no code of its own for it: a failed command carries the portal's reason.
+     */
+    fun isInputApprovalMissing(error: Throwable?): Boolean {
+        val api = error.apiError() ?: return false
+        return api.code == "command_failed" && api.message?.contains("requires portal approval", ignoreCase = true) == true
+    }
+
+    private fun Throwable?.apiError(): GestoApiException? =
+        generateSequence(this) { it.cause }.take(8).firstOrNull { it is GestoApiException } as? GestoApiException
 }

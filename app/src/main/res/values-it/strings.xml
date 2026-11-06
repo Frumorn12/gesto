@@ -136,6 +136,7 @@
     <string name="error_session_expired">Questo telefono non è più accoppiato con il PC. Accoppialo di nuovo.</string>
     <string name="error_connection_lost">Connessione con %1$s persa.</string>
     <string name="error_generic">Qualcosa non ha funzionato: %1$s</string>
+    <string name="error_input_not_approved">Il PC non ha ancora approvato il controllo da questo telefono.</string>
 
     <string name="add_confirm_title">Conferma sul PC</string>
     <string name="add_steps">Passo %1$d di %2$d</string>

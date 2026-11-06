@@ -79,6 +79,7 @@ import it.frumorn.gesto.ui.components.GestoTextButton
 import it.frumorn.gesto.ui.components.GestoTileButton
 import it.frumorn.gesto.ui.state.TouchpadActions
 import it.frumorn.gesto.ui.state.TouchpadInput
+import it.frumorn.gesto.ui.state.sendsClicks
 import it.frumorn.gesto.ui.state.TouchpadUiState
 import it.frumorn.gesto.ui.theme.GestoTheme
 import it.frumorn.gesto.ui.theme.ThemeMode
@@ -123,8 +124,8 @@ fun TouchpadScreen(
     }
 
     fun click(button: PointerButton) {
-        // A click that was dropped (no link, input not approved) must not feel like it worked.
-        val sent = currentState.input == TouchpadInput.Ready &&
+        // A click that was not sent (no link, a PC that refuses input) must not feel like it worked.
+        val sent = currentState.input.sendsClicks &&
             currentActions.onPointerButton(button, ButtonState.Pressed)
         if (sent) buzz(HapticFeedbackType.ContextClick)
         currentActions.onPointerButton(button, ButtonState.Released)

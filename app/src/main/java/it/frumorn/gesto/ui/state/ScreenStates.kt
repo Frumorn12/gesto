@@ -100,6 +100,27 @@ enum class TouchpadInput {
     Blocked,
 }
 
+/**
+ * Whether the touchpad's input reaches the PC, from what the PC said ([capabilities], known once
+ * [connected]) and whether it has told this app that its input is approved ([inputApproved]: the
+ * answer to "Ask the PC", which the daemon keeps for as long as it runs). The input backend's name
+ * plays no part: a portal PC keeps calling itself `wayland-portal` after the approval.
+ */
+fun touchpadInput(connected: Boolean, capabilities: CapabilitySummary, inputApproved: Boolean): TouchpadInput = when {
+    // Until the PC has answered, what it can do is not known yet.
+    connected && !capabilities.inputSupported -> TouchpadInput.Blocked
+    capabilities.inputRequiresApproval && !inputApproved -> TouchpadInput.NeedsApproval
+    else -> TouchpadInput.Ready
+}
+
+/**
+ * Whether a click is sent to the PC. Only a PC that refuses input gets none: one still waiting
+ * for approval may have been approved already (by this phone before a reconnect, or by another
+ * one), and if not the daemon says so.
+ */
+val TouchpadInput.sendsClicks: Boolean
+    get() = this != TouchpadInput.Blocked
+
 @Immutable
 data class TouchpadUiState(
     val input: TouchpadInput = TouchpadInput.Ready,

@@ -137,6 +137,7 @@
     <string name="error_session_expired">This phone is no longer paired with the PC. Pair it again.</string>
     <string name="error_connection_lost">Lost the connection to %1$s.</string>
     <string name="error_generic">Something went wrong: %1$s</string>
+    <string name="error_input_not_approved">The PC hasn\'t approved control from this phone yet.</string>
 
     <string name="add_confirm_title">Confirm on the PC</string>
     <string name="add_steps">Step %1$d of %2$d</string>

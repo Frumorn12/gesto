@@ -9,6 +9,8 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import org.junit.Test
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 
 class ErrorTranslatorTest {
     private fun t(e: Throwable, c: ErrorContext = ErrorContext.Command, port: Int = 47771) =
@@ -38,4 +40,15 @@ class ErrorTranslatorTest {
         assertEquals(UiText.Res(R.string.error_generic, listOf("boom")), t(GestoApiException("weird", "boom", false)))
     @Test fun genericPlain() =
         assertEquals(UiText.Res(R.string.error_generic, listOf("oops")), t(RuntimeException("oops")))
+
+    private val notApproved = GestoApiException("command_failed", "Input injection requires portal approval on this session", true)
+
+    @Test fun inputNotApprovedIsTranslated() =
+        assertEquals(UiText.Res(R.string.error_input_not_approved), t(notApproved))
+
+    @Test fun inputNotApprovedIsRecognised() {
+        assertTrue(ErrorTranslator.isInputApprovalMissing(notApproved))
+        assertFalse(ErrorTranslator.isInputApprovalMissing(GestoApiException("command_failed", "Text input rejected", true)))
+        assertFalse(ErrorTranslator.isInputApprovalMissing(null))
+    }
 }

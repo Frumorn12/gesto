@@ -162,6 +162,12 @@ data class GestoUiState(
     val roundedCorners: Boolean = false,
     val remoteInputSessionActive: Boolean = false,
     val remoteInputBacklog: Int = 0,
+    /**
+     * Fingerprints of the PCs that said their input is approved (the answer to "Ask the PC"), in
+     * this run of the app. The daemon keeps the approval while it runs, so it outlives a reconnect;
+     * a refusal for lack of approval takes the PC out again.
+     */
+    val inputApprovedHosts: Set<String> = emptySet(),
     /** Touchpad pointer speed, 0.5 to 3.0. */
     val pointerSpeed: Float = PointerAcceleration.DEFAULT_SPEED,
     val pointerAcceleration: Boolean = true,
@@ -318,6 +324,8 @@ class GestoViewModel(
     private val keyboardQueue = Channel<suspend () -> Unit>(Channel.UNLIMITED)
 
     init {
+        // A refused pointer move or click is answered later, while another request is read.
+        client.onOneWayError = { error -> viewModelScope.launch { reportCommandFailure(error) } }
         observeVideoSession()
         viewModelScope.launch { drainInputCommands() }
         viewModelScope.launch { for (job in keyboardQueue) runQuiet(job) }
@@ -1578,7 +1586,22 @@ class GestoViewModel(
         }
     }
 
-    fun prepareInput() = launchCommand("Requesting portal approval...") { client.prepareInput() }
+    fun prepareInput() = launchCommand("Requesting portal approval...") {
+        val fingerprint = _state.value.connectedHost?.fingerprint
+        val ready = client.prepareInput()
+        if (fingerprint != null) setInputApproved(fingerprint, ready)
+    }
+
+    /** Records whether the PC with [fingerprint] takes the phone's input without asking again. */
+    private fun setInputApproved(fingerprint: String, approved: Boolean) {
+        if (fingerprint.isBlank()) return
+        if (approved != (fingerprint in _state.value.inputApprovedHosts)) {
+            Log.i(TAG, "input_approval approved=$approved")
+        }
+        _state.update {
+            it.copy(inputApprovedHosts = if (approved) it.inputApprovedHosts + fingerprint else it.inputApprovedHosts - fingerprint)
+        }
+    }
 
     fun beginRemoteInteraction(): Long {
         val sessionId = ++nextInteractionSessionId
@@ -2096,6 +2119,10 @@ class GestoViewModel(
     private fun reportCommandFailure(throwable: Throwable) {
         if (throwable is CancellationException) return
         Log.w(TAG, "command_failed", throwable)
+        if (ErrorTranslator.isInputApprovalMissing(throwable)) {
+            // The PC forgot the approval (its daemon restarted): the touchpad asks for it again.
+            _state.value.connectedHost?.fingerprint?.let { setInputApproved(it, false) }
+        }
         emitNotice(Notice(ErrorTranslator.translate(throwable, ErrorContext.Command, currentPort())))
     }
 
@@ -2509,6 +2536,7 @@ class GestoViewModel(
         presenceJob?.cancel()
         addPcScanJob?.cancel()
         livePairing = 0L
+        client.onOneWayError = null
         client.shutdown()
         super.onCleared()
     }
