@@ -68,24 +68,25 @@ fun ExternalPointerCaptureEffect(enabled: Boolean) {
     }
 }
 
-/** Lets the remote display rotate freely, restoring the previous policy on exit. */
+/**
+ * Lets the remote screen turn with the phone (on its side it goes full screen), keeps the rest of
+ * the app upright, and restores the previous policy on exit.
+ */
 @Composable
-fun RemoteScreenOrientationEffect(onRemoteDisplay: Boolean, fullscreen: Boolean) {
+fun RemoteScreenOrientationEffect(onRemoteDisplay: Boolean, gameMode: Boolean) {
     val view = LocalView.current
-    DisposableEffect(onRemoteDisplay, fullscreen, view) {
+    DisposableEffect(onRemoteDisplay, gameMode, view) {
         val activity = view.context.findActivity()
         val previous = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         val policy = when {
-            // A desktop is 16:9 and fullscreen exists to give it the whole display. Following the
-            // sensor here would let the phone sit in portrait and waste three quarters of the
-            // screen on letterboxing, so landscape is requested outright — but either way up, so
-            // the phone can still be turned around.
-            fullscreen -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            // Windowed mode has the setup card and the controls to read, so the sensor decides.
+            // Game mode is the full screen on purpose: a desktop is wide, so landscape is asked for
+            // outright - either way up, so the phone can still be turned around.
+            onRemoteDisplay && gameMode -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            // Upright shows the screen with its actions under it; on its side, only the screen.
             onRemoteDisplay -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
             else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
-        Log.i("GestoRemoteScreen", "orientation_policy=$policy fullscreen=$fullscreen")
+        Log.i("GestoRemoteScreen", "orientation_policy=$policy game_mode=$gameMode")
         activity?.requestedOrientation = policy
         onDispose {
             activity?.requestedOrientation = previous
@@ -93,7 +94,7 @@ fun RemoteScreenOrientationEffect(onRemoteDisplay: Boolean, fullscreen: Boolean)
     }
 }
 
-/** Hides/shows the system bars for the immersive remote display. */
+/** Hides the system bars while the remote screen is full screen (on its side, or in Game mode). */
 @Composable
 fun FullscreenSystemUiEffect(enabled: Boolean) {
     val view = LocalView.current

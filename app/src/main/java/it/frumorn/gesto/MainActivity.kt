@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (handleControllerRevealShortcut(event)) return true
+        if (handleControllerMenuShortcut(event)) return true
         val external = externalInputMapper.keyEventToExternal(event)
         if (external != null && routeExternalInputEvent(external)) return true
         return super.dispatchKeyEvent(event)
@@ -111,7 +111,8 @@ class MainActivity : ComponentActivity() {
         intent.removeExtra(EXTRA_CONNECT_HOST)
     }
 
-    private fun handleControllerRevealShortcut(event: KeyEvent): Boolean {
+    /** MODE, or SELECT and START together, on a controller open (or close) the quick menu. */
+    private fun handleControllerMenuShortcut(event: KeyEvent): Boolean {
         val device = event.device ?: return false
         if (!device.isExternal) return false
         val classes = AndroidExternalInputClassifier.classify(device.sources, device.keyboardType)
@@ -126,7 +127,7 @@ class MainActivity : ComponentActivity() {
 
         if (event.keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                viewModel.revealRemoteScreenControls("controller_mode")
+                viewModel.toggleQuickMenuFromController("controller_mode")
             }
             return true
         }
@@ -136,7 +137,7 @@ class MainActivity : ComponentActivity() {
                 KeyEvent.KEYCODE_BUTTON_START in pressedControllerKeys
         if (selectStartCombo) {
             if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                viewModel.revealRemoteScreenControls("controller_start_select")
+                viewModel.toggleQuickMenuFromController("controller_start_select")
             }
             return true
         }

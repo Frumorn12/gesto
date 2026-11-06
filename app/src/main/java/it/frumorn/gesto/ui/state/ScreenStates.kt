@@ -5,10 +5,12 @@ import it.frumorn.gesto.AddPcStep
 import it.frumorn.gesto.SessionMode
 import it.frumorn.gesto.core.externalinput.ExternalInputDeviceSummary
 import it.frumorn.gesto.core.model.CapabilitySummary
-import it.frumorn.gesto.core.model.ScreenSource
 import it.frumorn.gesto.core.model.ScreenStreamStats
+import it.frumorn.gesto.core.model.StreamProfile
 import it.frumorn.gesto.core.model.StreamSettings
+import it.frumorn.gesto.core.model.TouchMode
 import it.frumorn.gesto.core.session.Presence
+import it.frumorn.gesto.ui.navigation.QuickMenuEntry
 import it.frumorn.gesto.ui.text.UiText
 
 /**
@@ -28,9 +30,29 @@ data class SessionUiState(
     val latencyMs: Int? = null,
     val mode: SessionMode = SessionMode.Touchpad,
     val keyboardOpen: Boolean = false,
-    val quickMenuOpen: Boolean = false,
     /** The remote screen fills the display: no bars at all. */
     val fullscreen: Boolean = false,
+)
+
+/**
+ * The quick menu, the same one in every session mode, and the purple button that opens it on the
+ * Screen (elsewhere it opens with the back key).
+ */
+@Immutable
+data class QuickMenuUiState(
+    val open: Boolean = false,
+    val entries: List<QuickMenuEntry> = emptyList(),
+    val audioOn: Boolean = true,
+    val touchMode: TouchMode = TouchMode.Touchpad,
+    /** The quality shown (Automatic, Smooth or Sharp, see `shownQuality`). */
+    val quality: StreamProfile = StreamProfile.Balanced,
+    val gameMode: Boolean = false,
+    val showButton: Boolean = false,
+    /** Where the button sits, as fractions (0..1) of the room it can move in. */
+    val buttonX: Float = 1f,
+    val buttonY: Float = 1f,
+    /** The button pulses to be noticed, in the first sessions until it is opened. */
+    val pulse: Boolean = false,
 )
 
 @Immutable
@@ -87,30 +109,28 @@ data class TouchpadUiState(
     val controllerConnected: Boolean = false,
 )
 
+/** The remote screen: the video, how touches drive the PC, and what is shown around it. */
 @Immutable
 data class RemoteDisplayUiState(
     /** Source resolution of the stream; `null` until the decoder reports a format. */
     val frameWidth: Int? = null,
     val frameHeight: Int? = null,
+    /** The capture source the frames come from; touches start over when it changes. */
+    val sourceKey: String? = null,
     val captureSupported: Boolean = false,
-    val inputSupported: Boolean = false,
-    val screenSources: List<ScreenSource> = emptyList(),
-    val selectedScreenSourceId: String? = null,
-    val streamingSource: ScreenSource? = null,
     val screenStreaming: Boolean = false,
-    val screenStatus: String = "Screen stream idle",
-    val screenError: String? = null,
     val stats: ScreenStreamStats = ScreenStreamStats(),
+    /** The small line with resolution, fps and delay over the video. */
+    val showStats: Boolean = true,
+    val latencyMs: Int? = null,
+    /** Only the video and the purple button: the phone is on its side, or Game mode is on. */
     val fullscreen: Boolean = false,
-    val gameMode: Boolean = false,
-    val controlsVisible: Boolean = true,
+    val touchMode: TouchMode = TouchMode.Touchpad,
     val haptics: Boolean = true,
     val audioMuted: Boolean = false,
-) {
-    /** Source actually feeding the viewport, falling back to the user selection. */
-    val activeSource: ScreenSource?
-        get() = streamingSource ?: screenSources.firstOrNull { it.id == selectedScreenSourceId }
-}
+    val keyboardOpen: Boolean = false,
+    val twoFingerRightClick: Boolean = true,
+)
 
 @Immutable
 data class ControlsUiState(

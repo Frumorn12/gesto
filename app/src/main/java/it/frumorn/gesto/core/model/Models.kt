@@ -107,6 +107,12 @@ enum class StreamProfile(
         )
 }
 
+/**
+ * How a finger on the remote screen drives the PC: like the touchpad (it moves the pointer from
+ * where it is) or directly (a tap clicks where it touches).
+ */
+enum class TouchMode { Touchpad, Direct }
+
 data class StreamSettings(
     val profile: StreamProfile = StreamProfile.Balanced,
     val maxFps: Int = StreamProfile.Balanced.defaultFps,

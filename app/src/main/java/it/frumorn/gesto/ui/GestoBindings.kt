@@ -13,10 +13,13 @@ import it.frumorn.gesto.core.model.CapabilitySummary
 import it.frumorn.gesto.core.model.ConnectionState
 import it.frumorn.gesto.core.model.DiscoveredHost
 import it.frumorn.gesto.core.model.label
+import it.frumorn.gesto.core.model.shownQuality
 import it.frumorn.gesto.core.network.identity
 import it.frumorn.gesto.core.session.Presence
 import it.frumorn.gesto.core.session.isLocalNetworkAddress
+import it.frumorn.gesto.remoteScreenFullscreen
 import it.frumorn.gesto.sessionMode
+import it.frumorn.gesto.ui.navigation.quickMenuEntries
 import it.frumorn.gesto.ui.state.AddPcActions
 import it.frumorn.gesto.ui.state.AddPcUiState
 import it.frumorn.gesto.ui.state.ControlsActions
@@ -30,6 +33,8 @@ import it.frumorn.gesto.ui.state.LaunchActions
 import it.frumorn.gesto.ui.state.LaunchUiState
 import it.frumorn.gesto.ui.state.FoundPcState
 import it.frumorn.gesto.ui.state.PcCardState
+import it.frumorn.gesto.ui.state.QuickMenuActions
+import it.frumorn.gesto.ui.state.QuickMenuUiState
 import it.frumorn.gesto.ui.state.RemoteDisplayActions
 import it.frumorn.gesto.ui.state.RemoteDisplayUiState
 import it.frumorn.gesto.ui.state.SessionActions
@@ -55,6 +60,9 @@ class GestoActions(
     val onBack: () -> Boolean = { true },
     val launch: LaunchActions = LaunchActions(),
     val session: SessionActions = SessionActions(),
+    val quickMenu: QuickMenuActions = QuickMenuActions(),
+    /** The window turned (true: wider than tall). */
+    val onLandscapeChanged: (Boolean) -> Unit = {},
     val addPc: AddPcActions = AddPcActions(),
     val touchpad: TouchpadActions = TouchpadActions(),
     val remoteDisplay: RemoteDisplayActions = RemoteDisplayActions(),
@@ -81,6 +89,12 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
             onSetQuickMenuOpen = viewModel::setQuickMenuOpen,
             onDisconnect = viewModel::disconnect,
         ),
+        quickMenu = QuickMenuActions(
+            onSetOpen = viewModel::setQuickMenuOpen,
+            onEntry = viewModel::onQuickMenuEntry,
+            onMoveButton = viewModel::moveQuickButton,
+        ),
+        onLandscapeChanged = viewModel::setLandscape,
         addPc = AddPcActions(
             onSelectPc = viewModel::selectHostForPairing,
             onOpenQr = viewModel::openQr,
@@ -108,22 +122,15 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
             onPointerFailed = viewModel::notePointerFailure,
         ),
         remoteDisplay = RemoteDisplayActions(
-            onSelectSource = viewModel::selectScreenSource,
             onStartStream = viewModel::startScreenStream,
-            onStopStream = viewModel::stopScreenStream,
-            onRefreshSources = viewModel::loadScreenSources,
-            onSetFullscreen = viewModel::setRemoteScreenFullscreen,
-            onSetGameMode = viewModel::setRemoteScreenGameMode,
-            onSetControlsVisible = { visible, reason ->
-                viewModel.setRemoteScreenControlsVisible(visible, reason)
-            },
-            onRevealControls = viewModel::revealRemoteScreenControls,
-            onKeyboardEdit = viewModel::sendLiveKeyboardEdit,
-            onPointerButton = viewModel::pointerButton,
+            onPointerMove = viewModel::pointerMove,
+            onPointerButton = { button, state -> viewModel.pointerButton(button, state) },
+            onReleasePointerButtons = viewModel::releasePointerButtons,
             onDesktopPointerMove = viewModel::remoteScreenPointerMove,
             onDesktopClick = { x, y -> viewModel.remoteScreenClick(x, y) },
             onScroll = { dx, dy, finish -> viewModel.scroll(dx, dy, finish) },
             onToggleAudioMute = viewModel::toggleAudioMute,
+            onToggleKeyboard = { viewModel.setKeyboardOpen(!viewModel.state.value.keyboardOpen) },
         ),
         keyboard = KeyboardActions(
             onKeyboardEdit = viewModel::sendLiveKeyboardEdit,
@@ -169,9 +176,25 @@ internal fun GestoUiState.toSessionState(): SessionUiState = SessionUiState(
     latencyMs = latencyMs,
     mode = screen.sessionMode ?: lastMode,
     keyboardOpen = keyboardOpen,
-    quickMenuOpen = quickMenuOpen,
-    fullscreen = screen == Screen.Display && remoteScreenFullscreen,
+    fullscreen = remoteScreenFullscreen,
 )
+
+/** The quick menu of the session mode on screen; the purple button only on the Screen. */
+internal fun GestoUiState.toQuickMenuState(): QuickMenuUiState {
+    val mode = screen.sessionMode ?: lastMode
+    return QuickMenuUiState(
+        open = quickMenuOpen,
+        entries = quickMenuEntries(mode, capabilities.captureSupported),
+        audioOn = !audioMuted,
+        touchMode = touchMode,
+        quality = shownQuality(streamSettings.profile),
+        gameMode = remoteScreenGameMode,
+        showButton = screen == Screen.Display,
+        buttonX = quickButtonX,
+        buttonY = quickButtonY,
+        pulse = quickMenuPulse,
+    )
+}
 
 internal fun GestoUiState.toLaunchState(): LaunchUiState = LaunchUiState(
     hostName = launchHost?.label.orEmpty(),
@@ -212,20 +235,18 @@ internal fun GestoUiState.toTouchpadState(): TouchpadUiState = TouchpadUiState(
 internal fun GestoUiState.toRemoteDisplayState(): RemoteDisplayUiState = RemoteDisplayUiState(
     frameWidth = videoWidth,
     frameHeight = videoHeight,
+    sourceKey = screenStreamInfo?.source?.id ?: selectedScreenSourceId,
     captureSupported = capabilities.captureSupported,
-    inputSupported = capabilities.inputSupported,
-    screenSources = screenSources,
-    selectedScreenSourceId = selectedScreenSourceId,
-    streamingSource = screenStreamInfo?.source,
     screenStreaming = screenStreaming,
-    screenStatus = screenStatus,
-    screenError = screenError,
     stats = screenStreamStats,
+    showStats = streamSettings.showStats,
+    latencyMs = latencyMs,
     fullscreen = remoteScreenFullscreen,
-    gameMode = remoteScreenGameMode,
-    controlsVisible = remoteScreenControlsVisible,
+    touchMode = touchMode,
     haptics = haptics,
     audioMuted = audioMuted,
+    keyboardOpen = keyboardOpen,
+    twoFingerRightClick = twoFingerRightClick,
 )
 
 internal fun GestoUiState.toControlsState(): ControlsUiState = ControlsUiState(

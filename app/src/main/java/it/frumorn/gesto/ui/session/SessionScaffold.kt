@@ -7,17 +7,14 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
@@ -36,7 +33,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -68,22 +64,22 @@ import it.frumorn.gesto.SessionMode
 import it.frumorn.gesto.ui.components.GestoIconButton
 import it.frumorn.gesto.ui.components.GestoIcons
 import it.frumorn.gesto.ui.navigation.SessionDockItems
+import it.frumorn.gesto.ui.navigation.quickMenuEntries
+import it.frumorn.gesto.ui.state.QuickMenuActions
+import it.frumorn.gesto.ui.state.QuickMenuUiState
 import it.frumorn.gesto.ui.state.SessionActions
 import it.frumorn.gesto.ui.state.SessionUiState
-import it.frumorn.gesto.ui.theme.GestoLightColors
 import it.frumorn.gesto.ui.theme.GestoMotion
 import it.frumorn.gesto.ui.theme.GestoTheme
 import it.frumorn.gesto.ui.theme.ThemeMode
 
 private const val INDICATOR_WIDTH = 0.4f
-private const val MENU_SCALE_FROM = 0.85f
 private const val SHEET_SCALE_FROM = 0.7f
-private const val DISABLED_ALPHA = 0.38f
 
 /**
  * The connected session: top bar (back to the PCs, PC name, link state, latency, settings), the
- * 4-item bottom bar, and the hosts for the keyboard sheet and the quick menu. The remote screen in
- * fullscreen hides both bars.
+ * 4-item bottom bar, the keyboard sheet and, over the content, the quick menu ([quickMenu], see
+ * [QuickMenuLayer]). The remote screen in fullscreen hides both bars.
  *
  * [onDockHeightChanged] reports the bottom bar height so the app's snackbar can sit above it.
  */
@@ -94,7 +90,7 @@ fun SessionScaffold(
     modifier: Modifier = Modifier,
     onDockHeightChanged: (Dp) -> Unit = {},
     keyboardSheet: @Composable () -> Unit = {},
-    quickMenu: @Composable () -> Unit = { QuickMenuPlaceholder(actions) },
+    quickMenu: @Composable () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -121,11 +117,7 @@ fun SessionScaffold(
                     .fillMaxSize(),
             ) {
                 content()
-                QuickMenuHost(
-                    open = state.quickMenuOpen,
-                    onDismiss = { actions.onSetQuickMenuOpen(false) },
-                    content = quickMenu,
-                )
+                quickMenu()
             }
         }
         KeyboardSheetHost(
@@ -283,28 +275,6 @@ private fun AnimatedVisibilityScope.scaleYModifier(from: Float, origin: Transfor
 }
 
 @Composable
-private fun BoxScope.QuickMenuHost(open: Boolean, onDismiss: () -> Unit, content: @Composable () -> Unit) {
-    if (open) {
-        // A tap anywhere outside the menu closes it, and does not reach the touchpad underneath.
-        Box(
-            Modifier
-                .fillMaxSize()
-                .clickable(interactionSource = null, indication = null, onClick = onDismiss),
-        )
-    }
-    AnimatedVisibility(
-        visible = open,
-        enter = EnterTransition.None,
-        exit = ExitTransition.None,
-        modifier = Modifier
-            .align(Alignment.BottomEnd)
-            .padding(GestoTheme.spacing.xxl),
-    ) {
-        Box(scaleYModifier(MENU_SCALE_FROM, TransformOrigin(1f, 1f), GestoMotion.MENU_MS)) { content() }
-    }
-}
-
-@Composable
 private fun BoxScope.KeyboardSheetHost(open: Boolean, onClose: () -> Unit, content: @Composable () -> Unit) {
     AnimatedVisibility(
         visible = open,
@@ -343,77 +313,6 @@ private fun BoxScope.KeyboardSheetHost(open: Boolean, onClose: () -> Unit, conte
     }
 }
 
-/**
- * Stand-in for the quick menu: the entries it will have, greyed out, plus the two that already
- * work. The menu itself is white with a dark edge in both themes, like the final one.
- */
-@Composable
-fun QuickMenuPlaceholder(actions: SessionActions, modifier: Modifier = Modifier) {
-    val upcoming = listOf(
-        GestoIcons.Keyboard to R.string.dock_keyboard,
-        GestoIcons.RightClick to R.string.quick_right_click,
-        GestoIcons.Volume to R.string.quick_pc_audio,
-        GestoIcons.Touch to R.string.quick_touch,
-        GestoIcons.Quality to R.string.quick_quality,
-        GestoIcons.Game to R.string.quick_game_mode,
-        GestoIcons.Touchpad to R.string.quick_back_to_touchpad,
-    )
-    val menu = GestoLightColors
-    Surface(
-        modifier = modifier.width(GestoTheme.spacing.quickMenuWidth),
-        color = menu.background,
-        contentColor = menu.onBackground,
-        shape = MaterialTheme.shapes.extraSmall,
-        border = BorderStroke(GestoTheme.spacing.borderWidth, menu.onBackground),
-        shadowElevation = GestoTheme.spacing.md,
-    ) {
-        Column {
-            upcoming.forEach { (icon, label) ->
-                QuickMenuRow(icon, stringResource(label), enabled = false, accent = menu.primary)
-                HorizontalDivider(color = menu.outlineVariant)
-            }
-            QuickMenuRow(
-                GestoIcons.Back,
-                stringResource(R.string.quick_back_to_pcs),
-                accent = menu.primary,
-                onClick = actions.onBackToPcs,
-            )
-            HorizontalDivider(color = menu.outlineVariant)
-            QuickMenuRow(
-                GestoIcons.Exit,
-                stringResource(R.string.quick_disconnect),
-                accent = menu.error,
-                textColor = menu.error,
-                onClick = actions.onDisconnect,
-            )
-        }
-    }
-}
-
-@Composable
-private fun QuickMenuRow(
-    icon: ImageVector,
-    label: String,
-    accent: Color,
-    enabled: Boolean = true,
-    textColor: Color = Color.Unspecified,
-    onClick: () -> Unit = {},
-) {
-    val alpha = if (enabled) 1f else DISABLED_ALPHA
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = GestoTheme.spacing.xl, vertical = GestoTheme.spacing.lg)
-            .graphicsLayer { this.alpha = alpha },
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(GestoTheme.spacing.menuIconSize))
-        Spacer(Modifier.width(GestoTheme.spacing.lg))
-        Text(label, style = MaterialTheme.typography.labelLarge, color = textColor)
-    }
-}
-
 @Preview(name = "Session - touchpad - light", widthDp = 412, heightDp = 860)
 @Composable
 private fun SessionScaffoldPreviewLight() {
@@ -433,8 +332,18 @@ private fun SessionScaffoldPreviewDark() {
     GestoTheme(mode = ThemeMode.Dark) {
         Box(Modifier.background(MaterialTheme.colorScheme.background)) {
             SessionScaffold(
-                state = SessionUiState(hostName = "Legion", mode = SessionMode.Display, quickMenuOpen = true, reconnecting = true),
+                state = SessionUiState(hostName = "Legion", mode = SessionMode.Display, reconnecting = true),
                 actions = SessionActions(),
+                quickMenu = {
+                    QuickMenuLayer(
+                        QuickMenuUiState(
+                            open = true,
+                            entries = quickMenuEntries(SessionMode.Display, captureSupported = true),
+                            showButton = true,
+                        ),
+                        QuickMenuActions(),
+                    )
+                },
             ) { Box(Modifier.fillMaxSize()) }
         }
     }

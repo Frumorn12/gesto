@@ -1,5 +1,6 @@
 package it.frumorn.gesto.ui
 
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
@@ -27,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -44,6 +46,7 @@ import it.frumorn.gesto.core.model.ConnectionState
 import it.frumorn.gesto.core.model.NoticeAction
 import it.frumorn.gesto.core.model.TrustedHost
 import it.frumorn.gesto.isSession
+import it.frumorn.gesto.remoteScreenFullscreen
 import it.frumorn.gesto.ui.components.GestoPageBar
 import it.frumorn.gesto.ui.navigation.ScreensCapturingExternalPointer
 import it.frumorn.gesto.ui.screens.ControlsScreen
@@ -52,12 +55,13 @@ import it.frumorn.gesto.ui.screens.addPcTitle
 import it.frumorn.gesto.ui.screens.HomeScreen
 import it.frumorn.gesto.ui.session.KeyboardSheet
 import it.frumorn.gesto.ui.screens.LaunchScreen
-import it.frumorn.gesto.ui.screens.RemoteDisplayScreen
+import it.frumorn.gesto.ui.screens.DisplayScreen
 import it.frumorn.gesto.ui.screens.RemoteDisplayVideoSurface
 import it.frumorn.gesto.ui.screens.SettingsScreen
 import it.frumorn.gesto.ui.screens.TouchpadScreen
 import it.frumorn.gesto.ui.screens.TroubleshootingScreen
 import it.frumorn.gesto.ui.session.GestoSnackbarHost
+import it.frumorn.gesto.ui.session.QuickMenuLayer
 import it.frumorn.gesto.ui.session.SessionScaffold
 import it.frumorn.gesto.ui.system.ExternalPointerCaptureEffect
 import it.frumorn.gesto.ui.system.FullscreenSystemUiEffect
@@ -151,13 +155,16 @@ internal fun GestoAppShell(
     videoSurface: @Composable () -> Unit = {},
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
-    val remoteFullscreen = state.screen == Screen.Display && state.remoteScreenFullscreen
+    val remoteFullscreen = state.remoteScreenFullscreen
     val externalPointerCapture = state.connectionState == ConnectionState.Connected &&
         state.screen in ScreensCapturingExternalPointer
 
+    // The ViewModel decides what "on its side" means for the session (full screen, controller).
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    LaunchedEffect(landscape) { actions.onLandscapeChanged(landscape) }
     RemoteScreenOrientationEffect(
         onRemoteDisplay = state.screen == Screen.Display,
-        fullscreen = remoteFullscreen,
+        gameMode = state.remoteScreenGameMode,
     )
     FullscreenSystemUiEffect(remoteFullscreen)
     ExternalPointerCaptureEffect(externalPointerCapture)
@@ -203,18 +210,20 @@ private fun SessionPage(
     val last = remember { Last(Screen.Touchpad) }
     if (state.screen.isSession) last.value = state.screen
     val session = state.toSessionState()
-    val gutter = if (session.fullscreen) GestoTheme.spacing.none else GestoTheme.spacing.gutter
     SessionScaffold(
         state = session,
         actions = actions.session,
         onDockHeightChanged = onDockHeightChanged,
         keyboardSheet = { KeyboardSheet(actions.keyboard) },
+        quickMenu = { QuickMenuLayer(state.toQuickMenuState(), actions.quickMenu) },
     ) {
         AnimatedContent(
             targetState = last.value,
             transitionSpec = { GestoMotion.screenChange(enterOffset) },
             label = "session-mode",
         ) { screen ->
+            // The remote screen runs edge to edge; the other modes keep the page gutter.
+            val gutter = if (screen == Screen.Display) GestoTheme.spacing.none else GestoTheme.spacing.gutter
             Box(
                 Modifier
                     .padding(horizontal = gutter)
@@ -222,7 +231,7 @@ private fun SessionPage(
             ) {
                 when (screen) {
                     Screen.Touchpad -> TouchpadScreen(state.toTouchpadState(), actions.touchpad)
-                    Screen.Display -> RemoteDisplayScreen(
+                    Screen.Display -> DisplayScreen(
                         state = state.toRemoteDisplayState(),
                         actions = actions.remoteDisplay,
                         videoSurface = videoSurface,

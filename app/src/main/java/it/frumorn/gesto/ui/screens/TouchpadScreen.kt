@@ -452,7 +452,7 @@ private fun HintChip(@StringRes text: Int, fingers: Int? = null) {
 }
 
 /** [template] with its `%1$s` replaced by [value] in [style], wherever the language puts it. */
-private fun highlightPlaceholder(template: String, value: String, style: SpanStyle): AnnotatedString {
+internal fun highlightPlaceholder(template: String, value: String, style: SpanStyle): AnnotatedString {
     val placeholder = "%1\$s"
     val at = template.indexOf(placeholder)
     if (at < 0) return AnnotatedString(template)

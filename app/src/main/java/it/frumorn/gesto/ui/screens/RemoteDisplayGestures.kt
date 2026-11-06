@@ -1,161 +1,232 @@
 package it.frumorn.gesto.ui.screens
 
+import android.util.Log
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
-import androidx.compose.ui.unit.IntSize
+import it.frumorn.gesto.core.input.DirectTouchAction
+import it.frumorn.gesto.core.input.DirectTouchMachine
+import it.frumorn.gesto.core.input.MultiTouchAction
+import it.frumorn.gesto.core.input.MultiTouchGesture
+import it.frumorn.gesto.core.input.PointerDelta
+import it.frumorn.gesto.core.input.RemoteGestureAction
+import it.frumorn.gesto.core.input.RemotePointer
+import it.frumorn.gesto.core.input.RemoteTouchpadGestureMachine
 import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.PointerButton
+import it.frumorn.gesto.core.model.TouchMode
+import it.frumorn.gesto.core.screen.DesktopPoint
 import it.frumorn.gesto.core.screen.ScreenViewport
-import kotlin.math.hypot
+import it.frumorn.gesto.core.video.ZoomTransform
+import kotlin.coroutines.cancellation.CancellationException
 
-/** Host-side effects the remote-display gesture recogniser can trigger. */
-@Immutable
-data class RemoteDisplayGestureCallbacks(
-    val onDesktopPointerMove: (x: Float, y: Float) -> Unit,
-    val onDesktopClick: (x: Float, y: Float) -> Unit,
-    val onPointerButton: (PointerButton, ButtonState) -> Unit,
-    val onScroll: (dx: Float, dy: Float, finish: Boolean) -> Unit,
-)
-
-/** Long-press duration after which a moving finger becomes a left-button drag. */
-private const val DRAG_HOLD_MILLIS = 320L
+private const val TAG = "GestoRemoteScreen"
 
 /** Damping applied to two-finger scroll deltas before they are sent to the host. */
 private const val SCROLL_DAMPING = 0.75f
 
+/** What a touch on the remote screen can make the PC do. */
+@Immutable
+data class RemoteDisplayGestureCallbacks(
+    /** Absolute pointer position on the PC's screen (Direct mode). */
+    val onDesktopPointerMove: (x: Float, y: Float) -> Unit,
+    /** Left click at a point of the PC's screen (Direct mode). */
+    val onDesktopClick: (x: Float, y: Float) -> Unit,
+    /** Relative pointer move (Touchpad mode); returns what was sent, or null when nothing was. */
+    val onPointerMove: (dx: Float, dy: Float) -> PointerDelta?,
+    val onPointerButton: (PointerButton, ButtonState) -> Unit,
+    val onScroll: (dx: Float, dy: Float, finish: Boolean) -> Unit,
+    val onToggleKeyboard: () -> Unit,
+    /** A light vibration, when the user wants them. */
+    val onHaptic: (HapticFeedbackType) -> Unit,
+)
+
+/** How far a finger may wander for each gesture, in pixels. */
+@Immutable
+data class RemoteDisplaySlops(
+    /** Still a tap. */
+    val tapPx: Float,
+    /** Two fingers: pinch or scroll, see [MultiTouchGesture]. */
+    val multiTouchPx: Float,
+    /** A second tap this close clicks on the first, in Direct mode. */
+    val doubleTapPx: Float,
+)
+
 /**
- * Absolute pointer mapping for the remote display.
+ * Touches on the remote screen.
  *
- * Behaviour is a verbatim move of the previous inline `pointerInput` block, including the
- * `pointerInput` key set, the `consume()` calls, the drag/scroll arbitration and the tap detection.
- * It maps view coordinates onto desktop coordinates through [ScreenViewport], which assumes the
- * video output is letterboxed with `ContentScale.Fit` semantics inside the same box - whatever
- * renders the frames must keep that contract.
+ * One finger follows the [touchMode]: in [TouchMode.Touchpad] it drives the pointer like the
+ * touchpad does ([RemoteTouchpadGestureMachine]: move, tap to click, hold then move to drag); in
+ * [TouchMode.Direct] it works where it touches ([DirectTouchMachine]). As soon as a second finger
+ * lands the one-finger gesture is dropped and [MultiTouchGesture] decides between pinch (zoom and
+ * pan, through [zoom] and [onZoom]) and scroll; a quick two-finger tap is a right click (if
+ * [twoFingerRightClick]), a three-finger tap opens the keyboard.
  *
- * @param frameWidth width in pixels of the last decoded frame, `null` when nothing has arrived yet
- * @param frameHeight height in pixels of the last decoded frame
- * @param viewSize measured size of the viewport box
+ * Direct mode maps view points onto the PC's screen through the zoom and [ScreenViewport], which
+ * assumes the video is letterboxed with fit-centre semantics inside this same box (see
+ * [RemoteDisplayVideoSurface]); touches on the letterbox do nothing there.
+ *
+ * @param frameWidth width in pixels of the stream, `null` while nothing has arrived
  * @param sourceKey id of the capture source; a change restarts the recogniser
- * @param hapticsEnabled snapshot of the user's haptics preference
- * @param edgeGuardPx width of the trailing strip reserved for the arc menu; touches starting
- *   inside it are ignored here. The overlay above consumes them, but this recogniser deliberately
- *   takes pointers with `requireUnconsumed = false`, so it has to be told to keep its hands off
- *   rather than relying on consumption.
  */
 fun Modifier.remoteDisplayGestures(
+    touchMode: TouchMode,
     frameWidth: Int?,
     frameHeight: Int?,
-    viewSize: IntSize,
     sourceKey: String?,
-    tapSlopPx: Float,
-    hapticsEnabled: Boolean,
-    haptics: HapticFeedback,
+    slops: RemoteDisplaySlops,
+    twoFingerRightClick: Boolean,
     callbacks: RemoteDisplayGestureCallbacks,
-    edgeGuardPx: Float = 0f,
-): Modifier = pointerInput(frameWidth, frameHeight, viewSize, sourceKey, edgeGuardPx) {
-    if (frameWidth == null || frameHeight == null) return@pointerInput
-    if (viewSize.width <= 0 || viewSize.height <= 0) return@pointerInput
-    val viewport = ScreenViewport(
-        viewWidth = viewSize.width.toFloat(),
-        viewHeight = viewSize.height.toFloat(),
-        sourceWidth = frameWidth.toFloat(),
-        sourceHeight = frameHeight.toFloat(),
-    )
+    zoom: () -> ZoomTransform,
+    onZoom: (ZoomTransform) -> Unit,
+): Modifier = pointerInput(touchMode, frameWidth, frameHeight, sourceKey, slops, twoFingerRightClick, callbacks) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
-        if (edgeGuardPx > 0f && down.position.x >= size.width - edgeGuardPx) {
-            return@awaitEachGesture
-        }
         down.consume()
-        val start = viewport.map(down.position.x, down.position.y)
-        var lastPoint = start
-        var moved = false
-        var dragActive = false
-        var scrollActive = false
-        var lastCentroid: Offset? = null
-        if (start != null) callbacks.onDesktopPointerMove(start.x, start.y)
+        val width = size.width.toFloat()
+        val height = size.height.toFloat()
+        val viewport = if (frameWidth != null && frameHeight != null && width > 0f && height > 0f) {
+            ScreenViewport(width, height, frameWidth.toFloat(), frameHeight.toFloat())
+        } else {
+            null
+        }
 
+        fun desktop(x: Float, y: Float): DesktopPoint? {
+            val (contentX, contentY) = zoom().toContent(x, y)
+            return viewport?.map(contentX, contentY)
+        }
+
+        fun click(button: PointerButton) {
+            callbacks.onHaptic(HapticFeedbackType.ContextClick)
+            callbacks.onPointerButton(button, ButtonState.Pressed)
+            callbacks.onPointerButton(button, ButtonState.Released)
+        }
+
+        // Direct mode presses the button only where the PC's screen is: a drag that started on
+        // the letterbox has nothing to release.
+        var directPressed = false
+        fun onDirect(action: DirectTouchAction) {
+            when (action) {
+                is DirectTouchAction.Hover -> desktop(action.x, action.y)?.let { callbacks.onDesktopPointerMove(it.x, it.y) }
+                is DirectTouchAction.Click -> desktop(action.x, action.y)?.let {
+                    callbacks.onHaptic(HapticFeedbackType.ContextClick)
+                    callbacks.onDesktopClick(it.x, it.y)
+                }
+                is DirectTouchAction.DragStart -> desktop(action.x, action.y)?.let {
+                    callbacks.onHaptic(HapticFeedbackType.LongPress)
+                    callbacks.onDesktopPointerMove(it.x, it.y)
+                    callbacks.onPointerButton(PointerButton.Left, ButtonState.Pressed)
+                    directPressed = true
+                }
+                is DirectTouchAction.DragMove -> desktop(action.x, action.y)?.let { callbacks.onDesktopPointerMove(it.x, it.y) }
+                DirectTouchAction.DragEnd -> if (directPressed) {
+                    directPressed = false
+                    callbacks.onPointerButton(PointerButton.Left, ButtonState.Released)
+                }
+            }
+        }
+
+        fun onPad(action: RemoteGestureAction) {
+            when (action) {
+                is RemoteGestureAction.Move -> callbacks.onPointerMove(action.dx, action.dy)
+                RemoteGestureAction.Click -> click(PointerButton.Left)
+                RemoteGestureAction.DragStart -> {
+                    callbacks.onHaptic(HapticFeedbackType.LongPress)
+                    callbacks.onPointerButton(PointerButton.Left, ButtonState.Pressed)
+                }
+                RemoteGestureAction.DragEnd -> callbacks.onPointerButton(PointerButton.Left, ButtonState.Released)
+                is RemoteGestureAction.ModeChanged -> if (action.from != action.to) {
+                    Log.d(TAG, "pad_transition from=${action.from.label} to=${action.to.label} reason=${action.reason}")
+                }
+                // Several fingers never reach the touchpad machine here: MultiTouchGesture has them.
+                is RemoteGestureAction.Scroll,
+                RemoteGestureAction.FinishScroll,
+                RemoteGestureAction.RightClick,
+                RemoteGestureAction.ToggleKeyboard -> Unit
+            }
+        }
+
+        fun onMulti(action: MultiTouchAction) {
+            when (action) {
+                // The page follows the fingers, as on a phone.
+                is MultiTouchAction.Scroll -> callbacks.onScroll(-action.dx * SCROLL_DAMPING, -action.dy * SCROLL_DAMPING, false)
+                MultiTouchAction.FinishScroll -> callbacks.onScroll(0f, 0f, true)
+                is MultiTouchAction.Zoom -> onZoom(
+                    zoom()
+                        .zoomBy(action.factor, action.focusX, action.focusY, width, height)
+                        .panBy(action.panX, action.panY, width, height),
+                )
+                MultiTouchAction.RightClick -> if (twoFingerRightClick) click(PointerButton.Right)
+                MultiTouchAction.ToggleKeyboard -> callbacks.onToggleKeyboard()
+            }
+        }
+
+        val direct = if (touchMode == TouchMode.Direct) {
+            DirectTouchMachine(slopPx = slops.tapPx, doubleTapSlopPx = slops.doubleTapPx)
+        } else {
+            null
+        }
+        // Built per gesture, like on the touchpad, so a setting change applies from the next touch.
+        val pad = if (touchMode == TouchMode.Touchpad) {
+            RemoteTouchpadGestureMachine(tapSlopPx = slops.tapPx, twoFingerTapEnabled = false)
+        } else {
+            null
+        }
+        var multi: MultiTouchGesture? = null
+        direct?.down(down.position.x, down.position.y, down.uptimeMillis)?.forEach(::onDirect)
+        pad?.begin(down.pointer(), down.uptimeMillis)?.forEach(::onPad)
         try {
             while (true) {
                 val event = awaitPointerEvent()
                 val pressed = event.changes.filter { it.pressed }
                 val now = event.changes.maxOfOrNull { it.uptimeMillis } ?: down.uptimeMillis
-                if (pressed.size >= 2) {
-                    if (!scrollActive) {
-                        if (dragActive) {
-                            callbacks.onPointerButton(PointerButton.Left, ButtonState.Released)
-                            dragActive = false
-                        }
-                        scrollActive = true
-                        lastCentroid = pressed.centroid()
-                    } else {
-                        val centroid = pressed.centroid()
-                        lastCentroid?.let { previous ->
-                            callbacks.onScroll(
-                                (previous.x - centroid.x) * SCROLL_DAMPING,
-                                (previous.y - centroid.y) * SCROLL_DAMPING,
-                                false,
-                            )
-                        }
-                        lastCentroid = centroid
-                    }
+                if (multi == null && pressed.size >= 2) {
+                    // A second finger: whatever one finger was doing is over, without a click.
+                    direct?.cancel()?.forEach(::onDirect)
+                    pad?.cancel("second_finger")?.forEach(::onPad)
+                    multi = MultiTouchGesture(slops.multiTouchPx, slops.tapPx, down.uptimeMillis)
+                }
+                val fingers = multi
+                if (fingers != null) {
+                    fingers.update(pressed.map { it.pointer() }, now).forEach(::onMulti)
                 } else {
-                    if (scrollActive) {
-                        callbacks.onScroll(0f, 0f, true)
-                        scrollActive = false
-                        lastCentroid = null
-                    }
-                    val change = pressed.firstOrNull()
-                    if (change != null) {
-                        val distance = hypot(
-                            change.position.x - down.position.x,
-                            change.position.y - down.position.y,
-                        )
-                        if (distance > tapSlopPx) moved = true
-                        val mapped = viewport.map(change.position.x, change.position.y)
-                        if (mapped != null) {
-                            if (moved && !dragActive && now - down.uptimeMillis > DRAG_HOLD_MILLIS) {
-                                if (hapticsEnabled) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                callbacks.onPointerButton(PointerButton.Left, ButtonState.Pressed)
-                                dragActive = true
-                            }
-                            callbacks.onDesktopPointerMove(mapped.x, mapped.y)
-                            lastPoint = mapped
-                        }
+                    pressed.firstOrNull()?.let { finger ->
+                        direct?.move(finger.position.x, finger.position.y, now)?.forEach(::onDirect)
+                        pad?.update(listOf(finger.pointer()), now)?.forEach(::onPad)
                     }
                 }
                 event.changes.forEach { change ->
-                    if (change.changedToDown() || change.changedToUp() || change.positionChanged()) {
-                        change.consume()
-                    }
+                    if (change.changedToDown() || change.changedToUp() || change.positionChanged()) change.consume()
                 }
-                if (pressed.isEmpty()) break
+                if (pressed.isEmpty()) {
+                    if (fingers != null) {
+                        fingers.end(now).forEach(::onMulti)
+                    } else {
+                        val lifted = event.changes.firstOrNull { it.changedToUp() } ?: down
+                        direct?.up(lifted.position.x, lifted.position.y, now)?.forEach(::onDirect)
+                        pad?.end(now)?.forEach(::onPad)
+                    }
+                    break
+                }
             }
+        } catch (cancelled: CancellationException) {
+            Log.w(TAG, "remote_screen_gesture_cancelled")
+            throw cancelled
         } finally {
-            if (scrollActive) callbacks.onScroll(0f, 0f, true)
-            if (dragActive) callbacks.onPointerButton(PointerButton.Left, ButtonState.Released)
-        }
-        if (!moved && start != null && lastPoint != null) {
-            if (hapticsEnabled) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-            callbacks.onDesktopClick(start.x, start.y)
+            // Whatever was left half done (a drag, a scroll) is closed; after a normal end these
+            // have nothing left to do.
+            direct?.cancel()?.forEach(::onDirect)
+            pad?.cancel("gesture_finally")?.forEach(::onPad)
+            multi?.update(emptyList(), down.uptimeMillis)?.forEach(::onMulti)
         }
     }
 }
 
-internal fun List<PointerInputChange>.centroid(): Offset {
-    val pressed = filter { it.pressed }
-    if (pressed.isEmpty()) return Offset.Zero
-    val x = pressed.sumOf { it.position.x.toDouble() }.toFloat() / pressed.size
-    val y = pressed.sumOf { it.position.y.toDouble() }.toFloat() / pressed.size
-    return Offset(x, y)
-}
+private fun PointerInputChange.pointer(): RemotePointer = RemotePointer(id.value, position.x, position.y)

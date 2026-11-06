@@ -94,6 +94,29 @@
     <string name="quick_back_to_touchpad">Torna al touchpad</string>
     <string name="quick_back_to_pcs">Torna ai PC</string>
     <string name="quick_disconnect">Scollega</string>
+    <string name="quick_menu">Menu rapido</string>
+    <string name="quick_on">acceso</string>
+    <string name="quick_off">spento</string>
+    <string name="touch_mode_touchpad">Touchpad</string>
+    <string name="touch_mode_direct">Diretto</string>
+    <string name="quality_automatic">Automatica</string>
+    <string name="quality_smooth">Fluida</string>
+    <string name="quality_sharp">Nitida</string>
+    <string name="notice_game_mode_on">Modalità gioco: 60 fps, tutto schermo, controller attivo</string>
+    <string name="notice_game_mode_off">Modalità gioco spenta</string>
+
+    <string name="display_audio_on">Audio</string>
+    <string name="display_audio_off">Muto</string>
+    <string name="display_rotate_hint">Gira il telefono: lo schermo va a tutto schermo e resta solo il pulsante viola.</string>
+    <!-- %1$s è il modo di tocco (Touchpad o Diretto), in colore. -->
+    <string name="display_touch_touchpad">Tocco: %1$s. Il dito muove il cursore, il tocco fa clic dov\'è il cursore.</string>
+    <string name="display_touch_direct">Tocco: %1$s. Il tocco fa clic dove tocchi. Per trascinare tieni premuto.</string>
+    <string name="display_starting">Avvio lo schermo…</string>
+    <string name="display_stopped">Lo schermo si è fermato.</string>
+    <string name="display_unavailable">Questo PC non può condividere lo schermo.</string>
+    <!-- Una riga sopra il video: altezza dello schermo del PC, fotogrammi al secondo, ritardo. -->
+    <string name="display_stats">%1$dp · %2$d fps · %3$d ms</string>
+    <string name="display_stats_no_delay">%1$dp · %2$d fps</string>
 
     <string name="error_pc_refused">Il PC non risponde sulla porta %1$d. Controlla che Gesto sia acceso.</string>
     <string name="error_pc_timeout">Il PC ci ha messo troppo a rispondere.</string>

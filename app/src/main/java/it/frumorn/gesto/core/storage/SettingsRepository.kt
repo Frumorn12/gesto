@@ -13,6 +13,9 @@ import it.frumorn.gesto.SessionMode
 import it.frumorn.gesto.core.input.PointerAcceleration
 import it.frumorn.gesto.core.model.StreamProfile
 import it.frumorn.gesto.core.model.StreamSettings
+import it.frumorn.gesto.core.model.TouchMode
+import it.frumorn.gesto.core.model.decodeStreamSettings
+import it.frumorn.gesto.core.model.encodeStreamSettings
 import it.frumorn.gesto.ui.theme.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -36,6 +39,11 @@ class SettingsRepository(private val context: Context) {
         val POINTER_ACCELERATION = booleanPreferencesKey("pointer_acceleration")
         val TWO_FINGER_RIGHT_CLICK = booleanPreferencesKey("two_finger_right_click")
         val TOUCHPAD_HINT_SESSIONS = intPreferencesKey("touchpad_hint_sessions")
+        val TOUCH_MODE = stringPreferencesKey("touch_mode")
+        val HUD_X = floatPreferencesKey("hud_x")
+        val HUD_Y = floatPreferencesKey("hud_y")
+        val HUD_HINT_SESSIONS = intPreferencesKey("hud_hint_sessions")
+        val SETTINGS_BEFORE_GAME = stringPreferencesKey("settings_before_game")
     }
 
     val streamSettings: Flow<StreamSettings> = context.dataStore.data.map { prefs ->
@@ -79,6 +87,42 @@ class SettingsRepository(private val context: Context) {
 
     /** How many sessions have shown the touchpad's gesture hints. */
     val touchpadHintSessions: Flow<Int> = context.dataStore.data.map { it[Keys.TOUCHPAD_HINT_SESSIONS] ?: 0 }
+
+    /** How a finger drives the PC on the remote screen; Touchpad until it is changed. */
+    val touchMode: Flow<TouchMode> = context.dataStore.data.map { prefs ->
+        TouchMode.entries.find { it.name == prefs[Keys.TOUCH_MODE] } ?: TouchMode.Touchpad
+    }
+
+    /**
+     * Where the quick-menu button sits, as fractions (0..1) of the room it can move in; the
+     * bottom-right corner until it is dragged.
+     */
+    val hudPosition: Flow<Pair<Float, Float>> = context.dataStore.data.map { prefs ->
+        (prefs[Keys.HUD_X] ?: 1f).coerceIn(0f, 1f) to (prefs[Keys.HUD_Y] ?: 1f).coerceIn(0f, 1f)
+    }
+
+    /** How many sessions have pulsed the quick-menu button to call attention to it. */
+    val hudHintSessions: Flow<Int> = context.dataStore.data.map { it[Keys.HUD_HINT_SESSIONS] ?: 0 }
+
+    /** The stream settings Game mode replaced, to put back when it goes off; null when it is off. */
+    val settingsBeforeGame: Flow<StreamSettings?> = context.dataStore.data.map { prefs ->
+        prefs[Keys.SETTINGS_BEFORE_GAME]?.let(::decodeStreamSettings)
+    }
+
+    suspend fun saveTouchMode(mode: TouchMode) {
+        context.dataStore.edit { prefs -> prefs[Keys.TOUCH_MODE] = mode.name }
+    }
+
+    suspend fun saveHudPosition(x: Float, y: Float) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.HUD_X] = x.coerceIn(0f, 1f)
+            prefs[Keys.HUD_Y] = y.coerceIn(0f, 1f)
+        }
+    }
+
+    suspend fun saveHudHintSessions(count: Int) {
+        context.dataStore.edit { prefs -> prefs[Keys.HUD_HINT_SESSIONS] = count }
+    }
 
     suspend fun savePointerSpeed(speed: Float) {
         context.dataStore.edit { prefs -> prefs[Keys.POINTER_SPEED] = PointerAcceleration.clampSpeed(speed) }
@@ -125,10 +169,25 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun saveGameMode(enabled: Boolean) {
+    /**
+     * Game mode on or off in one write, with the stream settings it streams with ([settings]) and
+     * those to restore afterwards ([before], null to forget them): a half-written switch would
+     * leave the quality it replaced lost.
+     */
+    suspend fun saveGameMode(enabled: Boolean, settings: StreamSettings, before: StreamSettings?) {
         context.dataStore.edit { prefs ->
             prefs[Keys.GAME_MODE] = enabled
+            prefs[Keys.STREAM_PROFILE] = settings.profile.name
+            prefs[Keys.STREAM_MAX_FPS] = settings.maxFps
+            prefs[Keys.STREAM_JPEG_QUALITY] = settings.jpegQuality
+            prefs[Keys.STREAM_MAX_DIMENSION] = settings.maxDimension
+            prefs[Keys.SHOW_STATS] = settings.showStats
             prefs[Keys.FIRST_RUN] = false
+            if (before != null) {
+                prefs[Keys.SETTINGS_BEFORE_GAME] = encodeStreamSettings(before)
+            } else {
+                prefs.remove(Keys.SETTINGS_BEFORE_GAME)
+            }
         }
     }
 }

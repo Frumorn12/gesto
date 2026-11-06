@@ -6,6 +6,7 @@ import it.frumorn.gesto.core.input.PointerDelta
 import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.PointerButton
 import it.frumorn.gesto.core.model.StreamProfile
+import it.frumorn.gesto.ui.navigation.QuickMenuEntry
 
 /**
  * Callback bundles handed down to the screens.
@@ -72,20 +73,29 @@ data class TouchpadActions(
 
 @Immutable
 data class RemoteDisplayActions(
-    val onSelectSource: (String) -> Unit = {},
+    /** Starts the screen again after it stopped. */
     val onStartStream: () -> Unit = {},
-    val onStopStream: () -> Unit = {},
-    val onRefreshSources: () -> Unit = {},
-    val onSetFullscreen: (Boolean) -> Unit = {},
-    val onSetGameMode: (Boolean) -> Unit = {},
-    val onSetControlsVisible: (visible: Boolean, reason: String) -> Unit = { _, _ -> },
-    val onRevealControls: (reason: String) -> Unit = {},
-    val onKeyboardEdit: (previous: String, next: String) -> Unit = { _, _ -> },
+    /** A finger move in the Touchpad touch mode; returns the move sent to the PC, or null. */
+    val onPointerMove: (dx: Float, dy: Float) -> PointerDelta? = { _, _ -> null },
     val onPointerButton: (PointerButton, ButtonState) -> Unit = { _, _ -> },
+    val onReleasePointerButtons: () -> Unit = {},
+    /** The pointer to this point of the PC's screen (Direct touch mode). */
     val onDesktopPointerMove: (x: Float, y: Float) -> Unit = { _, _ -> },
+    /** A left click at this point of the PC's screen (Direct touch mode). */
     val onDesktopClick: (x: Float, y: Float) -> Unit = { _, _ -> },
     val onScroll: (dx: Float, dy: Float, finish: Boolean) -> Unit = { _, _, _ -> },
     val onToggleAudioMute: () -> Unit = {},
+    /** The Keyboard tile and the three-finger tap: opens or closes the keyboard sheet. */
+    val onToggleKeyboard: () -> Unit = {},
+)
+
+/** The quick menu and its purple button. */
+@Immutable
+data class QuickMenuActions(
+    val onSetOpen: (Boolean) -> Unit = {},
+    val onEntry: (QuickMenuEntry) -> Unit = {},
+    /** The button was dragged here (fractions of the room it can move in). */
+    val onMoveButton: (x: Float, y: Float) -> Unit = { _, _ -> },
 )
 
 @Immutable

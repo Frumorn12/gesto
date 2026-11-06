@@ -23,8 +23,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
 import it.frumorn.gesto.ui.theme.GestoTheme
 
 // Material 3 buttons default to pills and ignore MaterialTheme.shapes; these wrappers apply the
@@ -110,6 +114,49 @@ fun GestoTileButton(
         border = BorderStroke(GestoTheme.spacing.borderWidth, colors.outlineVariant),
         interactionSource = interaction,
     ) { ButtonLabel(text, icon) }
+}
+
+/**
+ * A tile with the icon above a short label, for a row of equal quick actions (Right click,
+ * Keyboard, Audio under the remote screen). With [checked] it is a switch, tinted while on.
+ */
+@Composable
+fun GestoQuickTile(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    checked: Boolean? = null,
+) {
+    val colors = MaterialTheme.colorScheme
+    val on = checked == true
+    val shape = MaterialTheme.shapes.extraSmall
+    val border = if (on) null else BorderStroke(GestoTheme.spacing.borderWidth, colors.outlineVariant)
+    val container = if (on) colors.primaryContainer else colors.background
+    val content = if (on) colors.primary else colors.onSurface
+    val body: @Composable () -> Unit = {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(GestoTheme.spacing.hairline, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(GestoTheme.spacing.menuIconSize))
+            Text(text, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+        }
+    }
+    val sized = modifier.height(GestoTheme.spacing.quickTileHeight)
+    if (checked == null) {
+        Surface(onClick = onClick, modifier = sized, shape = shape, color = container, contentColor = content, border = border) { body() }
+    } else {
+        Surface(
+            checked = checked,
+            onCheckedChange = { onClick() },
+            modifier = sized,
+            shape = shape,
+            color = container,
+            contentColor = content,
+            border = border,
+        ) { body() }
+    }
 }
 
 /** Borderless text button; [color] replaces the primary colour (e.g. error for a destructive action). */

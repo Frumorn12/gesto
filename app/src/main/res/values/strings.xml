@@ -95,6 +95,29 @@
     <string name="quick_back_to_touchpad">Back to the touchpad</string>
     <string name="quick_back_to_pcs">Back to the PCs</string>
     <string name="quick_disconnect">Disconnect</string>
+    <string name="quick_menu">Quick menu</string>
+    <string name="quick_on">on</string>
+    <string name="quick_off">off</string>
+    <string name="touch_mode_touchpad">Touchpad</string>
+    <string name="touch_mode_direct">Direct</string>
+    <string name="quality_automatic">Automatic</string>
+    <string name="quality_smooth">Smooth</string>
+    <string name="quality_sharp">Sharp</string>
+    <string name="notice_game_mode_on">Game mode: 60 fps, full screen, controller on</string>
+    <string name="notice_game_mode_off">Game mode off</string>
+
+    <string name="display_audio_on">Audio</string>
+    <string name="display_audio_off">Muted</string>
+    <string name="display_rotate_hint">Turn the phone: the screen goes full screen and only the purple button stays.</string>
+    <!-- %1$s is the touch mode (Touchpad or Direct), shown in colour. -->
+    <string name="display_touch_touchpad">Touch: %1$s. Your finger moves the pointer, a tap clicks where the pointer is.</string>
+    <string name="display_touch_direct">Touch: %1$s. A tap clicks where you touch. To drag, hold first.</string>
+    <string name="display_starting">Starting the screen…</string>
+    <string name="display_stopped">The screen stopped.</string>
+    <string name="display_unavailable">This PC can\'t share its screen.</string>
+    <!-- One line over the video: height of the PC's screen, frames per second, delay. -->
+    <string name="display_stats">%1$dp · %2$d fps · %3$d ms</string>
+    <string name="display_stats_no_delay">%1$dp · %2$d fps</string>
 
     <string name="error_pc_refused">The PC is not answering on port %1$d. Check that Gesto is running on it.</string>
     <string name="error_pc_timeout">The PC took too long to answer.</string>

@@ -28,6 +28,9 @@ import it.frumorn.gesto.core.model.ScreenStreamInfo
 import it.frumorn.gesto.core.model.ScreenStreamStats
 import it.frumorn.gesto.core.model.StreamProfile
 import it.frumorn.gesto.core.model.StreamSettings
+import it.frumorn.gesto.core.model.TouchMode
+import it.frumorn.gesto.core.model.gameModeChange
+import it.frumorn.gesto.core.model.nextQuality
 import it.frumorn.gesto.core.model.TrustedHost
 import it.frumorn.gesto.core.model.formatFps
 import it.frumorn.gesto.core.model.MAX_PC_NAME_LENGTH
@@ -57,6 +60,7 @@ import it.frumorn.gesto.ui.text.UiText
 import it.frumorn.gesto.core.storage.SettingsRepository
 import it.frumorn.gesto.core.storage.TrustedHostStore
 import it.frumorn.gesto.ui.navigation.BackAction
+import it.frumorn.gesto.ui.navigation.QuickMenuEntry
 import it.frumorn.gesto.ui.navigation.backAction
 import it.frumorn.gesto.ui.navigation.reachableScreen
 import it.frumorn.gesto.ui.theme.ThemeMode
@@ -105,6 +109,10 @@ val Screen.isSession: Boolean
     get() = sessionMode != null
 
 private val SettingsScreens = setOf(Screen.Settings, Screen.Advanced, Screen.Diagnostics)
+
+/** The remote screen fills the display, bars hidden: the phone is on its side, or Game mode is on. */
+val GestoUiState.remoteScreenFullscreen: Boolean
+    get() = screen == Screen.Display && (landscape || remoteScreenGameMode)
 
 /** Intent extra (and `gesto://connect?host=` parameter) naming the paired PC to open on. */
 const val EXTRA_CONNECT_HOST = "it.frumorn.gesto.CONNECT_HOST"
@@ -166,9 +174,18 @@ data class GestoUiState(
     val audioMuted: Boolean = false,
     val screenStreaming: Boolean = false,
     val screenConnectionState: RemoteScreenConnectionState = RemoteScreenConnectionState.Idle,
-    val remoteScreenFullscreen: Boolean = false,
+    /** The window is wider than tall (reported by the app shell): the remote screen goes full screen. */
+    val landscape: Boolean = false,
     val remoteScreenGameMode: Boolean = false,
-    val remoteScreenControlsVisible: Boolean = true,
+    /** What Game mode replaced, put back when it goes off; null while it is off. */
+    val streamSettingsBeforeGame: StreamSettings? = null,
+    /** How a finger on the remote screen drives the PC. */
+    val touchMode: TouchMode = TouchMode.Touchpad,
+    /** Where the purple quick-menu button sits, as fractions of the room it can move in. */
+    val quickButtonX: Float = 1f,
+    val quickButtonY: Float = 1f,
+    /** The button pulses in this session (one of the first few) until the menu is opened. */
+    val quickMenuPulse: Boolean = false,
     val streamSettings: StreamSettings = StreamSettings(),
     val screenStreamStats: ScreenStreamStats = ScreenStreamStats(),
     val screenStatus: String = "Screen stream idle",
@@ -205,6 +222,8 @@ class GestoViewModel(
         const val DEFAULT_PORT = 47771
         /** The touchpad's gesture hints show in this many sessions. */
         const val TOUCHPAD_HINT_SESSIONS = 5
+        /** The quick-menu button pulses in this many sessions. */
+        const val QUICK_MENU_HINT_SESSIONS = 5
     }
 
     private val discovery = GestoDiscovery(application)
@@ -261,6 +280,8 @@ class GestoViewModel(
     private var pairingFromAddress = false
     /** Whether this session shows the touchpad hints has been decided (and counted). */
     private var touchpadHintsDecided = false
+    /** Whether the quick-menu button pulses in this session has been decided (and counted). */
+    private var quickMenuPulseDecided = false
     /** Fractions of a pixel the touchpad moves left behind, sent with the next move. */
     private val pointerCarry = SubPixelCarry()
 
@@ -315,6 +336,15 @@ class GestoViewModel(
         viewModelScope.launch {
             settingsRepo.twoFingerRightClick.collect { on -> _state.update { it.copy(twoFingerRightClick = on) } }
         }
+        viewModelScope.launch {
+            settingsRepo.settingsBeforeGame.collect { before -> _state.update { it.copy(streamSettingsBeforeGame = before) } }
+        }
+        viewModelScope.launch {
+            settingsRepo.touchMode.collect { mode -> _state.update { it.copy(touchMode = mode) } }
+        }
+        viewModelScope.launch {
+            settingsRepo.hudPosition.collect { (x, y) -> _state.update { it.copy(quickButtonX = x, quickButtonY = y) } }
+        }
         // After process death the saved session wins; otherwise open the PC a launcher shortcut
         // asked for (its intent extra arrives here as a default argument), else the last PC used.
         if (!restoreSessionState()) {
@@ -364,6 +394,7 @@ class GestoViewModel(
                         )
                     }
                     publishCurrentExternalDevices()
+                    autoStartScreenStream()
                 }
                 .onFailure { throwable ->
                     if (throwable is CancellationException) throw throwable
@@ -534,9 +565,9 @@ class GestoViewModel(
     }
 
     /**
-     * The only place the screen changes: it closes the keyboard sheet and the quick menu, stops
-     * the screen stream when leaving Display, remembers the session mode and where Settings was
-     * opened from. A session screen without a connected PC becomes the PCs list.
+     * The only place the screen changes: it closes the keyboard sheet and the quick menu, starts
+     * the screen stream on entering Display and stops it on leaving, remembers the session mode and
+     * where Settings was opened from. A session screen without a connected PC becomes the PCs list.
      */
     fun go(requested: Screen) {
         val screen = reachableScreen(requested, connected = _state.value.connectedHost != null)
@@ -563,25 +594,44 @@ class GestoViewModel(
                 quickMenuOpen = false,
                 lastMode = screen.sessionMode ?: it.lastMode,
                 error = null,
-                remoteScreenFullscreen = if (screen == Screen.Display) {
-                    it.remoteScreenFullscreen
-                } else {
-                    false
-                },
-                remoteScreenControlsVisible = if (screen == Screen.Display) {
-                    it.remoteScreenControlsVisible
-                } else {
-                    true
-                },
             )
         }
         if (!wasCapturingExternalInput && shouldCaptureExternalInput(_state.value)) {
             publishCurrentExternalDevices()
         }
-        if (screen == Screen.Display && _state.value.screenSources.isEmpty()) {
-            loadScreenSources()
-        }
         if (screen == Screen.Touchpad) decideTouchpadHints()
+        if (screen == Screen.Display) {
+            decideQuickMenuPulse()
+            autoStartScreenStream()
+        }
+    }
+
+    /**
+     * The Screen shows the PC's screen as soon as it opens, from the source the PC remembers:
+     * there is no start button. Nothing happens while the PC is not connected yet (it is started
+     * once it is), when it cannot share its screen, or when a stream is already wanted.
+     */
+    private fun autoStartScreenStream() {
+        val s = _state.value
+        if (s.screen != Screen.Display || s.connectionState != ConnectionState.Connected) return
+        if (!s.capabilities.captureSupported || screenStreamDesired) return
+        Log.i(TAG, "screen_stream_auto_start")
+        startScreenStream()
+    }
+
+    /**
+     * The first time a session shows the Screen: the quick-menu button pulses if fewer than
+     * [QUICK_MENU_HINT_SESSIONS] sessions have pulsed it, and this session is counted.
+     */
+    private fun decideQuickMenuPulse() {
+        if (quickMenuPulseDecided) return
+        quickMenuPulseDecided = true
+        viewModelScope.launch {
+            val shown = runCatching { settingsRepo.hudHintSessions.first() }.getOrDefault(QUICK_MENU_HINT_SESSIONS)
+            val pulse = shown < QUICK_MENU_HINT_SESSIONS
+            _state.update { it.copy(quickMenuPulse = pulse) }
+            if (pulse) settingsRepo.saveHudHintSessions(shown + 1)
+        }
     }
 
     /**
@@ -605,11 +655,6 @@ class GestoViewModel(
      */
     fun back(): Boolean {
         val s = _state.value
-        // The old fullscreen remote screen keeps its own exit until the quick menu replaces it.
-        if (s.screen == Screen.Display && s.remoteScreenFullscreen && !s.keyboardOpen && !s.quickMenuOpen) {
-            setRemoteScreenFullscreen(false)
-            return true
-        }
         when (val action = backAction(s.screen, s.keyboardOpen, s.quickMenuOpen, s.addPcStep, s.previousScreen)) {
             BackAction.CloseKeyboard -> setKeyboardOpen(false)
             BackAction.CloseQuickMenu -> setQuickMenuOpen(false)
@@ -630,7 +675,72 @@ class GestoViewModel(
     }
 
     fun setQuickMenuOpen(open: Boolean) {
-        _state.update { it.copy(quickMenuOpen = open && it.screen.isSession) }
+        _state.update {
+            val allowed = open && it.screen.isSession
+            // Once found, the button has done its job of being noticed for this session.
+            it.copy(quickMenuOpen = allowed, quickMenuPulse = it.quickMenuPulse && !allowed)
+        }
+    }
+
+    /** MODE, or SELECT and START together, on a controller: opens the quick menu, or closes it. */
+    fun toggleQuickMenuFromController(reason: String) {
+        val s = _state.value
+        if (!s.screen.isSession) return
+        Log.i(TAG, "quick_menu_controller reason=$reason open=${!s.quickMenuOpen}")
+        if (s.keyboardOpen) setKeyboardOpen(false)
+        setQuickMenuOpen(!s.quickMenuOpen)
+    }
+
+    /** A line of the quick menu. Audio, touch mode and quality keep it open, to be flipped again. */
+    fun onQuickMenuEntry(entry: QuickMenuEntry) {
+        val s = _state.value
+        Log.i(TAG, "quick_menu_entry entry=$entry screen=${s.screen}")
+        when (entry) {
+            QuickMenuEntry.Keyboard -> setKeyboardOpen(true)
+            QuickMenuEntry.RightClick -> {
+                setQuickMenuOpen(false)
+                pointerButton(PointerButton.Right, ButtonState.Pressed)
+                pointerButton(PointerButton.Right, ButtonState.Released)
+            }
+            QuickMenuEntry.Audio -> toggleAudioMute()
+            QuickMenuEntry.TouchMode -> setTouchMode(
+                if (s.touchMode == TouchMode.Touchpad) TouchMode.Direct else TouchMode.Touchpad,
+            )
+            QuickMenuEntry.Quality -> setStreamProfile(nextQuality(s.streamSettings.profile))
+            QuickMenuEntry.GameMode -> {
+                setQuickMenuOpen(false)
+                val enable = !s.remoteScreenGameMode
+                // From another mode, Game mode means the Screen: its settings are in place before
+                // the stream starts, so it starts once.
+                setRemoteScreenGameMode(enable)
+                if (enable && s.screen != Screen.Display) go(Screen.Display)
+            }
+            QuickMenuEntry.BackToTouchpad -> go(Screen.Touchpad)
+            QuickMenuEntry.BackToPcs -> go(Screen.Home)
+        }
+    }
+
+    fun setTouchMode(mode: TouchMode) {
+        if (_state.value.touchMode == mode) return
+        Log.i(TAG, "touch_mode mode=$mode")
+        _state.update { it.copy(touchMode = mode) }
+        viewModelScope.launch { settingsRepo.saveTouchMode(mode) }
+    }
+
+    /** The purple button was dragged here (fractions of the room it can move in). */
+    fun moveQuickButton(x: Float, y: Float) {
+        val fx = x.coerceIn(0f, 1f)
+        val fy = y.coerceIn(0f, 1f)
+        _state.update { it.copy(quickButtonX = fx, quickButtonY = fy) }
+        viewModelScope.launch { settingsRepo.saveHudPosition(fx, fy) }
+    }
+
+    /** The window turned; on its side the remote screen is full screen and takes the controller. */
+    fun setLandscape(landscape: Boolean) {
+        val before = _state.value
+        if (before.landscape == landscape) return
+        _state.update { it.copy(landscape = landscape) }
+        if (!before.remoteScreenFullscreen && _state.value.remoteScreenFullscreen) publishCurrentExternalDevices()
     }
 
     /**
@@ -783,7 +893,7 @@ class GestoViewModel(
         )
         _state.update {
             it.copy(
-                externalInputStatus = "Controller ready. Open Remote Screen fullscreen or Game Mode to forward it to the PC.",
+                externalInputStatus = "Controller ready. Turn the phone on the Screen, or turn on Game mode, to use it on the PC.",
             )
         }
     }
@@ -853,42 +963,26 @@ class GestoViewModel(
         viewModelScope.launch { settingsRepo.saveStreamSettings(_state.value.streamSettings) }
     }
 
+    /**
+     * Game mode: full screen, the Smooth quality and the controller forwarded to the PC. Turning it
+     * off puts back the quality from before, unless another one was chosen meanwhile.
+     */
     fun setRemoteScreenGameMode(enabled: Boolean) {
         val current = _state.value
         if (current.remoteScreenGameMode == enabled) return
-        Log.i(TAG, "remote_screen_game_mode enabled=$enabled")
-        val newSettings = if (enabled) {
-            StreamProfile.Game.toStreamSettings(showStats = current.streamSettings.showStats)
-        } else {
-            current.streamSettings
-        }
+        val (settings, before) = gameModeChange(enabled, current.streamSettings, current.streamSettingsBeforeGame)
+        Log.i(TAG, "remote_screen_game_mode enabled=$enabled profile=${settings.profile} remembered=${before?.profile}")
         _state.update {
             it.copy(
                 remoteScreenGameMode = enabled,
-                remoteScreenFullscreen = if (enabled) true else it.remoteScreenFullscreen,
-                remoteScreenControlsVisible = !enabled,
-                streamSettings = newSettings,
+                streamSettings = settings,
+                streamSettingsBeforeGame = before,
             )
         }
-        viewModelScope.launch {
-            settingsRepo.saveGameMode(enabled)
-            settingsRepo.saveStreamSettings(newSettings)
-        }
+        viewModelScope.launch { settingsRepo.saveGameMode(enabled, settings, before) }
         if (enabled) publishCurrentExternalDevices()
-        if (current.screenStreaming) startScreenStream()
-    }
-
-    fun setRemoteScreenControlsVisible(visible: Boolean, reason: String = "user") {
-        val current = _state.value
-        if (current.remoteScreenControlsVisible == visible) return
-        Log.i(TAG, "remote_screen_controls visible=$visible reason=$reason")
-        _state.update { it.copy(remoteScreenControlsVisible = visible) }
-    }
-
-    fun revealRemoteScreenControls(reason: String) {
-        if (_state.value.screen == Screen.Display && _state.value.remoteScreenFullscreen) {
-            setRemoteScreenControlsVisible(true, reason)
-        }
+        emitNotice(Notice(UiText.Res(if (enabled) R.string.notice_game_mode_on else R.string.notice_game_mode_off)))
+        if (current.screenStreaming && settings != current.streamSettings) startScreenStream()
     }
 
     /** "Add a PC" on the PCs list: the search step, which scans the network while it is shown. */
@@ -1282,8 +1376,9 @@ class GestoViewModel(
         interactionKeepAliveJob?.cancel()
         interactionEndJob?.cancel()
         activeInteractionSessionId = 0L
-        // The next session decides the touchpad hints again.
+        // The next session decides the touchpad hints and the button's pulse again.
         touchpadHintsDecided = false
+        quickMenuPulseDecided = false
         pointerCarry.reset()
         savedStateHandle["connectedHostId"] = null
         savedStateHandle["screen"] = null
@@ -1308,7 +1403,7 @@ class GestoViewModel(
                 videoHeight = null,
                 screenStreaming = false,
                 screenConnectionState = RemoteScreenConnectionState.Idle,
-                remoteScreenFullscreen = false,
+                quickMenuPulse = false,
                 screenStatus = "Screen stream idle",
                 screenError = null,
             )
@@ -1724,19 +1819,6 @@ class GestoViewModel(
         }
     }
 
-    fun setRemoteScreenFullscreen(enabled: Boolean) {
-        val current = _state.value.remoteScreenFullscreen
-        if (current == enabled) return
-        Log.i(TAG, "remote_screen_fullscreen enabled=$enabled")
-        _state.update {
-            it.copy(
-                remoteScreenFullscreen = enabled,
-                remoteScreenControlsVisible = if (enabled && it.remoteScreenGameMode) false else true,
-            )
-        }
-        if (enabled) publishCurrentExternalDevices()
-    }
-
     private suspend fun stopScreenStreamOnHost(sessionId: String, reason: String) {
         withContext(NonCancellable) {
             runCatching { client.stopScreenStream(sessionId) }
@@ -1951,6 +2033,7 @@ class GestoViewModel(
                     )
                 }
                 publishCurrentExternalDevices()
+                autoStartScreenStream()
                 emitNotice(Notice(UiText.Res(R.string.notice_reconnected)))
                 return true
             }
@@ -2044,11 +2127,19 @@ class GestoViewModel(
         }
     }
 
+    /**
+     * Drops whatever input is still waiting: gestures, and keys and text from the keyboard sheet.
+     * Called when the session ends or moves to another PC, so nothing typed during an outage is
+     * typed into a PC after the link comes back.
+     */
     private fun clearQueuedInput() {
         while (inputCommands.tryReceive().isSuccess) {
             // Drain stale gesture commands after explicit disconnect so they cannot reconnect or
             // mutate UI state after the user has left the remote session.
         }
+        var droppedKeys = 0
+        while (keyboardQueue.tryReceive().isSuccess) droppedKeys++
+        if (droppedKeys > 0) Log.i(TAG, "keyboard_queue_dropped count=$droppedKeys")
         queuedInputCommands.set(0)
         updateInputBacklog(0)
     }
@@ -2317,9 +2408,7 @@ private fun shouldForwardExternalInput(state: GestoUiState, event: ExternalInput
         (!event.isControllerLike() || shouldForwardControllerInput(state))
 
 private fun shouldForwardControllerInput(state: GestoUiState): Boolean =
-    state.connectionState == ConnectionState.Connected &&
-        state.screen == Screen.Display &&
-        (state.remoteScreenFullscreen || state.remoteScreenGameMode)
+    state.connectionState == ConnectionState.Connected && state.remoteScreenFullscreen
 
 private fun shouldConsumeControllerLocally(state: GestoUiState, event: ExternalInputEvent): Boolean =
     state.connectionState == ConnectionState.Connected && event.isControllerLike()

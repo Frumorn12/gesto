@@ -114,3 +114,9 @@ val GestoDarkExtraColors = GestoExtraColors(
 val GestoVideoLetterbox: Color = GestoLightExtraColors.video
 val GestoOnVideoLetterbox: Color = GestoLightExtraColors.onVideo
 val GestoOnVideoLetterboxMuted: Color = GestoLightExtraColors.onVideoMuted
+
+/** Shadow of the purple quick-menu button: black at 28 %. */
+val GestoButtonShadow: Color = Color(0x47000000)
+
+/** Shadow of the floating quick menu: deep blue at 30 %. */
+val GestoMenuShadow: Color = Color(0x4D1E1E52)

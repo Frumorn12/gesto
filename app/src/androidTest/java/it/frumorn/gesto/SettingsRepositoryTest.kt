@@ -3,7 +3,9 @@ package it.frumorn.gesto
 import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import it.frumorn.gesto.core.model.GameModePreset
 import it.frumorn.gesto.core.model.StreamProfile
+import it.frumorn.gesto.core.model.TouchMode
 import it.frumorn.gesto.core.storage.SettingsRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -68,8 +70,22 @@ class SettingsRepositoryTest {
 
     @Test
     fun saveAndRestoreGameMode() = runBlocking {
-        repo.saveGameMode(true)
-        val loaded = repo.gameMode.first()
-        assertEquals(true, loaded)
+        val before = StreamProfile.Quality.toStreamSettings(showStats = false)
+        repo.saveGameMode(true, GameModePreset, before)
+        assertEquals(true, repo.gameMode.first())
+        assertEquals(before, repo.settingsBeforeGame.first())
+        assertEquals(GameModePreset.profile, repo.streamSettings.first().profile)
+
+        repo.saveGameMode(false, before, null)
+        assertEquals(false, repo.gameMode.first())
+        assertEquals(null, repo.settingsBeforeGame.first())
+    }
+
+    @Test
+    fun touchModeAndButtonPositionAreKept() = runBlocking {
+        repo.saveTouchMode(TouchMode.Direct)
+        assertEquals(TouchMode.Direct, repo.touchMode.first())
+        repo.saveHudPosition(0.25f, 2f)
+        assertEquals(0.25f to 1f, repo.hudPosition.first())
     }
 }

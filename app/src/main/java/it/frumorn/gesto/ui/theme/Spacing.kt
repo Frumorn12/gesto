@@ -73,17 +73,30 @@ data class GestoSpacing(
     /** Size of the large decorative icon at the centre of empty states. */
     val emptyStateIconSize: Dp = 42.dp
 
-    /** Width of the drag handle revealed in game-mode fullscreen. */
-    val handleWidth: Dp = 44.dp
+    /** The purple quick-menu button, and how far its call-to-action pulse spreads. */
+    val quickButtonSize: Dp = 46.dp
+    val quickPulseSpread: Dp = 12.dp
 
-    /** Height of the drag handle revealed in game-mode fullscreen. */
-    val handleHeight: Dp = 3.dp
+    /** Shadows of the floating panels: the button (0 2 10) and the quick menu (0 10 30). */
+    val quickButtonShadowBlur: Dp = 10.dp
+    val quickButtonShadowY: Dp = 2.dp
+    val menuShadowBlur: Dp = 30.dp
+    val menuShadowY: Dp = 10.dp
 
-    /** Height of the invisible strip that reveals the fullscreen controls. */
-    val revealStripHeight: Dp = 34.dp
+    /** The three quick tiles under the remote screen (Right click, Keyboard, Audio). */
+    val quickTileHeight: Dp = 52.dp
 
-    /** Width reserved for the compact "Full" action in the stream setup card. */
-    val compactActionWidth: Dp = 120.dp
+    /** The phone icon of the "turn the phone" hint. */
+    val rotateIconSize: Dp = 26.dp
+
+    /**
+     * Two fingers on the remote screen: a change of their distance past this, before their centre
+     * moves as far, is a pinch; otherwise they scroll.
+     */
+    val multiTouchSlop: Dp = 24.dp
+
+    /** A second tap this close to the first, in the Direct touch mode, clicks on the first (about 60 px). */
+    val doubleTapSlop: Dp = 24.dp
 
     /** Line icons in the session bars. */
     val barIconSize: Dp = 22.dp
@@ -96,7 +109,7 @@ data class GestoSpacing(
     val loadingBarHeight: Dp = 3.dp
 
     /** Floating quick menu panel and its icons. */
-    val quickMenuWidth: Dp = 240.dp
+    val quickMenuWidth: Dp = 220.dp
     val menuIconSize: Dp = 20.dp
 
     /** Tallest the keyboard sheet grows before its content scrolls. */

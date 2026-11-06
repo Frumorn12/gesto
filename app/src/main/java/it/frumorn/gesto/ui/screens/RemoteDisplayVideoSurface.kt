@@ -1,27 +1,12 @@
 package it.frumorn.gesto.ui.screens
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Computer
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import it.frumorn.gesto.core.video.RemoteVideoRenderer
 import it.frumorn.gesto.core.video.GestoVideoView
-import it.frumorn.gesto.ui.theme.GestoOnVideoLetterbox
-import it.frumorn.gesto.ui.theme.GestoOnVideoLetterboxMuted
-import it.frumorn.gesto.ui.theme.GestoTheme
 
 /**
  * Video output of the remote desktop.
@@ -52,41 +37,4 @@ fun RemoteDisplayVideoSurface(
         onRelease = { view -> view.detachRenderer() },
         modifier = modifier.fillMaxSize(),
     )
-}
-
-/**
- * Centred empty state shown while no frame has been received.
- *
- * Drawn on the black letterbox, so it uses the theme-independent video content colours instead of
- * the scheme's `onSurface` roles.
- */
-@Composable
-fun BoxScope.RemoteDisplayPlaceholder(
-    statusText: String,
-    sourceLabel: String?,
-) {
-    Column(
-        Modifier
-            .align(Alignment.Center)
-            .padding(GestoTheme.spacing.hero),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            Icons.Rounded.Computer,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(GestoTheme.spacing.emptyStateIconSize),
-        )
-        Spacer(Modifier.height(GestoTheme.spacing.lg))
-        Text(
-            statusText,
-            style = MaterialTheme.typography.titleMedium,
-            color = GestoOnVideoLetterbox,
-        )
-        Text(
-            sourceLabel ?: "Select a source and start streaming",
-            style = MaterialTheme.typography.bodySmall,
-            color = GestoOnVideoLetterboxMuted,
-        )
-    }
 }
