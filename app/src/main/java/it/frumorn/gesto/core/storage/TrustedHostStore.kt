@@ -5,8 +5,6 @@ import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import it.frumorn.gesto.core.model.TrustedHost
-import org.json.JSONArray
-import org.json.JSONObject
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -21,43 +19,28 @@ class TrustedHostStore(context: Context) {
     fun load(): List<TrustedHost> {
         val encrypted = prefs.getString("trusted_hosts", null) ?: return emptyList()
         val raw = runCatching { box.decrypt(encrypted) }.getOrElse { return emptyList() }
-        val array = JSONArray(raw)
-        return List(array.length()) { index ->
-            val item = array.getJSONObject(index)
-            TrustedHost(
-                id = item.getString("id"),
-                hostName = item.getString("hostName"),
-                address = item.getString("address"),
-                port = item.getInt("port"),
-                fingerprint = item.getString("fingerprint"),
-                deviceId = item.getString("deviceId"),
-                sessionToken = item.getString("sessionToken"),
-                lastConnectedAt = item.optLong("lastConnectedAt", 0L),
-            )
-        }
+        return TrustedHostCodec.decode(raw)
     }
 
     fun save(hosts: List<TrustedHost>) {
-        val array = JSONArray()
-        hosts.forEach { host ->
-            array.put(
-                JSONObject()
-                    .put("id", host.id)
-                    .put("hostName", host.hostName)
-                    .put("address", host.address)
-                    .put("port", host.port)
-                    .put("fingerprint", host.fingerprint)
-                    .put("deviceId", host.deviceId)
-                    .put("sessionToken", host.sessionToken)
-                    .put("lastConnectedAt", host.lastConnectedAt)
-            )
-        }
-        prefs.edit().putString("trusted_hosts", box.encrypt(array.toString())).apply()
+        prefs.edit().putString("trusted_hosts", box.encrypt(TrustedHostCodec.encode(hosts))).apply()
     }
 
+    /** Applies [change] to the stored PC with [id]; returns the updated PC, null when there is none. */
+    fun update(id: String, change: (TrustedHost) -> TrustedHost): TrustedHost? {
+        val hosts = load()
+        val current = hosts.find { it.id == id } ?: return null
+        val updated = change(current)
+        save(hosts.map { if (it.id == id) updated else it })
+        return updated
+    }
+
+    /**
+     * Stores [host], replacing the entry with the same id or the same PC identity in its place (the
+     * PCs list keeps its order); a new PC goes last.
+     */
     fun upsert(host: TrustedHost) {
-        val hosts = load().filterNot { it.id == host.id || it.fingerprint == host.fingerprint } + host
-        save(hosts)
+        save(upsertInPlace(load(), host))
     }
 
     fun remove(id: String) {

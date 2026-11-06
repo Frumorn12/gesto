@@ -63,6 +63,7 @@ class GestoClient {
                 deviceId = data.getString("device_id"),
                 sessionToken = data.getString("session_token"),
                 lastConnectedAt = System.currentTimeMillis(),
+                macAddresses = data.macAddresses(),
             ) to data.optJSONObject("capabilities").toCapabilitySummary()
         } catch (e: Throwable) {
             ch.close()
@@ -72,9 +73,10 @@ class GestoClient {
         host to capabilities
     } }
 
-    suspend fun connect(host: TrustedHost): CapabilitySummary = withContext(Dispatchers.IO) { transportMutex.withLock {
+    /** Opens an authenticated session with a paired PC. */
+    suspend fun connect(host: TrustedHost): ConnectResult = withContext(Dispatchers.IO) { transportMutex.withLock {
         val ch = SecureChannel.connect(host.address, host.port, host.fingerprint)
-        val capabilities = try {
+        val result = try {
             val id = requestId()
             ch.send(
                 JSONObject()
@@ -84,13 +86,14 @@ class GestoClient {
                     .put("session_token", host.sessionToken)
                     .put("app_version", "0.1.0")
             )
-            ch.receiveResponse(id).getJSONObject("data").optJSONObject("capabilities").toCapabilitySummary()
+            val data = ch.receiveResponse(id).getJSONObject("data")
+            ConnectResult(data.optJSONObject("capabilities").toCapabilitySummary(), data.macAddresses())
         } catch (e: Throwable) {
             ch.close()
             throw e
         }
         adopt(ch)
-        capabilities
+        result
     } }
 
     suspend fun prepareInput() {
@@ -292,6 +295,25 @@ class GestoClient {
         }
 }
 
+/**
+ * What a PC says about itself when the app connects: what it can do, and the MAC addresses of its
+ * network cards (empty from a daemon that does not report them).
+ */
+data class ConnectResult(
+    val capabilities: CapabilitySummary,
+    val macAddresses: List<String> = emptyList(),
+)
+
+/** `data.mac_addresses` of a pair or auth response, keeping only well-formed addresses. */
+internal fun JSONObject.macAddresses(): List<String> {
+    val array = optJSONArray("mac_addresses") ?: return emptyList()
+    return (0 until array.length())
+        .mapNotNull { index -> array.opt(index) as? String }
+        .map { it.trim().lowercase() }
+        .filter { mac -> runCatching { WakeOnLan.magicPacket(mac) }.isSuccess }
+        .distinct()
+}
+
 /** The daemon answered, so the link is fine, but the command may or may not have run. */
 class RequestMayHaveRunException(cause: Throwable) : java.io.IOException(cause.message, cause)
 
@@ -331,6 +353,7 @@ private fun JSONObject?.toCapabilitySummary(): CapabilitySummary {
     val connectivity = optJSONObject("connectivity")
     val capture = optJSONObject("capture")
     val system = optJSONObject("system")
+    val audio = optJSONObject("audio_capture")
     return CapabilitySummary(
         inputSupported = input?.optBoolean("supported") ?: false,
         inputReason = input?.optString("reason", "No input capability data") ?: "No input capability data",
@@ -350,6 +373,7 @@ private fun JSONObject?.toCapabilitySummary(): CapabilitySummary {
         captureReason = capture?.optString("reason", "No capture capability data") ?: "No capture capability data",
         captureBackend = capture?.optString("backend", "unknown") ?: "unknown",
         captureRequiresApproval = capture?.optBoolean("requires_user_approval") ?: false,
+        audioSupported = audio?.optBoolean("supported") ?: false,
         volume = system?.optBoolean("volume") ?: false,
         media = system?.optBoolean("media") ?: false,
         brightness = system?.optBoolean("brightness") ?: false,

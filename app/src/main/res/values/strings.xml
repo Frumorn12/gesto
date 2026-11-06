@@ -11,8 +11,30 @@
     <string name="action_settings">Settings</string>
 
     <string name="nav_your_pcs">Your PCs</string>
-    <string name="home_subtitle">Pick the PC you want to control.</string>
     <string name="home_add_pc">Add a PC</string>
+    <string name="home_empty">Add the PC you want to control</string>
+    <string name="home_state_online">Online · same network</string>
+    <string name="home_state_offline">Offline</string>
+    <string name="home_state_looking">Looking…</string>
+    <string name="home_connect">Connect</string>
+    <string name="home_resume">Back to the PC</string>
+    <string name="home_wake">Wake</string>
+    <string name="home_more">More for %1$s</string>
+    <string name="home_rename">Rename</string>
+    <string name="home_rename_title">Rename the PC</string>
+    <string name="home_rename_label">Name</string>
+    <string name="home_rename_hint">Leave it empty to use the PC\'s own name.</string>
+    <string name="home_forget">Forget</string>
+    <string name="home_forget_title">Forget %1$s?</string>
+    <string name="home_forget_text">To use it again you\'ll have to add it again.</string>
+    <string name="home_chip_screen">Screen</string>
+    <string name="home_chip_audio">Audio</string>
+    <string name="home_chip_controller">Controller</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="notice_waking">Waking %1$s up. It can take a minute.</string>
+    <string name="notice_wake_failed">Couldn\'t send the wake-up signal to %1$s.</string>
+    <string name="shortcut_connect_long">Connect to %1$s</string>
     <string name="settings_diagnostics">Diagnostics</string>
 
     <string name="launch_connecting_to">Connecting to</string>

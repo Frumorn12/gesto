@@ -11,8 +11,30 @@
     <string name="action_settings">Impostazioni</string>
 
     <string name="nav_your_pcs">I tuoi PC</string>
-    <string name="home_subtitle">Scegli il PC che vuoi controllare.</string>
     <string name="home_add_pc">Aggiungi un PC</string>
+    <string name="home_empty">Aggiungi il PC che vuoi controllare</string>
+    <string name="home_state_online">Acceso · stessa rete</string>
+    <string name="home_state_offline">Spento</string>
+    <string name="home_state_looking">Cerco…</string>
+    <string name="home_connect">Collega</string>
+    <string name="home_resume">Torna al PC</string>
+    <string name="home_wake">Sveglia</string>
+    <string name="home_more">Altro per %1$s</string>
+    <string name="home_rename">Rinomina</string>
+    <string name="home_rename_title">Rinomina il PC</string>
+    <string name="home_rename_label">Nome</string>
+    <string name="home_rename_hint">Lascialo vuoto per usare il nome del PC.</string>
+    <string name="home_forget">Dimentica</string>
+    <string name="home_forget_title">Dimenticare %1$s?</string>
+    <string name="home_forget_text">Per usarlo di nuovo dovrai aggiungerlo un\'altra volta.</string>
+    <string name="home_chip_screen">Schermo</string>
+    <string name="home_chip_audio">Audio</string>
+    <string name="home_chip_controller">Controller</string>
+    <string name="action_save">Salva</string>
+    <string name="action_cancel">Annulla</string>
+    <string name="notice_waking">Sveglio %1$s. Può volerci un minuto.</string>
+    <string name="notice_wake_failed">Non riesco a mandare il segnale di sveglia a %1$s.</string>
+    <string name="shortcut_connect_long">Collegati a %1$s</string>
     <string name="settings_diagnostics">Diagnostica</string>
 
     <string name="launch_connecting_to">Mi collego a</string>

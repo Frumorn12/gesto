@@ -7,7 +7,6 @@ import it.frumorn.gesto.core.model.ButtonState
 import it.frumorn.gesto.core.model.DiscoveredHost
 import it.frumorn.gesto.core.model.PointerButton
 import it.frumorn.gesto.core.model.StreamProfile
-import it.frumorn.gesto.core.model.TrustedHost
 
 /**
  * Callback bundles handed down to the screens.
@@ -31,12 +30,6 @@ data class SessionActions(
 @Immutable
 data class LaunchActions(
     val onChooseAnotherPc: () -> Unit = {},
-)
-
-@Immutable
-data class OnboardingActions(
-    val onDiscoverHosts: () -> Unit = {},
-    val onOpenTrustedHosts: () -> Unit = {},
 )
 
 @Immutable
@@ -115,11 +108,18 @@ data class SettingsActions(
     val onDisconnect: () -> Unit = {},
 )
 
+/** The PCs list. Every PC is addressed by its id. */
 @Immutable
-data class TrustedHostsActions(
-    val onDiscoverNewHost: () -> Unit = {},
-    val onConnect: (TrustedHost) -> Unit = {},
-    val onRemove: (id: String) -> Unit = {},
+data class HomeActions(
+    val onConnect: (String) -> Unit = {},
+    /** "Back to the PC": the session that is open. */
+    val onResume: () -> Unit = {},
+    val onDisconnect: () -> Unit = {},
+    val onWake: (String) -> Unit = {},
+    val onRename: (id: String, name: String) -> Unit = { _, _ -> },
+    val onForget: (String) -> Unit = {},
+    val onAddPc: () -> Unit = {},
+    val onOpenSettings: () -> Unit = {},
 )
 
 @Immutable

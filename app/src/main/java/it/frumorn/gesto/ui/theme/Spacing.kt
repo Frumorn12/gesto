@@ -80,6 +80,12 @@ data class GestoSpacing(
 
     /** Tallest the keyboard sheet grows before its content scrolls. */
     val keyboardSheetMaxHeight: Dp = 420.dp
+
+    /** The square dot before a PC's status line. */
+    val statusDotSize: Dp = 8.dp
+
+    /** The Gesto mark on the empty PCs list. */
+    val emptyMarkSize: Dp = 72.dp
 }
 
 val LocalGestoSpacing = staticCompositionLocalOf { GestoSpacing() }

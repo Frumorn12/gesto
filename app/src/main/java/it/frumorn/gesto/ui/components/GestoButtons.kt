@@ -79,7 +79,7 @@ fun GestoOutlinedButton(
     ) { ButtonLabel(text, icon) }
 }
 
-/** Borderless text button. */
+/** Borderless text button; [color] replaces the primary colour (e.g. error for a destructive action). */
 @Composable
 fun GestoTextButton(
     text: String,
@@ -87,12 +87,18 @@ fun GestoTextButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     icon: ImageVector? = null,
+    color: Color = Color.Unspecified,
 ) {
     TextButton(
         onClick = onClick,
         modifier = modifier.height(ButtonHeight),
         enabled = enabled,
         shape = MaterialTheme.shapes.extraSmall,
+        colors = if (color == Color.Unspecified) {
+            ButtonDefaults.textButtonColors()
+        } else {
+            ButtonDefaults.textButtonColors(contentColor = color)
+        },
     ) { ButtonLabel(text, icon) }
 }
 

@@ -41,6 +41,14 @@
                     android:host="invite"
                     android:scheme="waypad" />
             </intent-filter>
+            <!-- Launcher shortcuts open a paired PC. Not BROWSABLE: a web page cannot fire it. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data
+                    android:host="connect"
+                    android:scheme="gesto" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>

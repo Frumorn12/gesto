@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import it.frumorn.gesto.core.model.DiscoveredHost
-import it.frumorn.gesto.core.model.TrustedHost
 import it.frumorn.gesto.ui.theme.GestoPreviewSurface
 import it.frumorn.gesto.ui.theme.GestoTheme
 
@@ -102,46 +101,6 @@ fun DiscoveredHostCard(
     }
 }
 
-/** A pinned host stored in the trusted-host store. */
-@Composable
-fun TrustedHostCard(
-    host: TrustedHost,
-    onConnect: () -> Unit,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    GestoCard(modifier = modifier) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.Rounded.Computer,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.width(GestoTheme.spacing.xl))
-            Column(Modifier.weight(1f)) {
-                Text(host.hostName, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "${host.address}:${host.port}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    shortFingerprint(host.fingerprint),
-                    style = GestoTheme.accentTypography.fingerprint,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        Spacer(Modifier.height(GestoTheme.spacing.xl))
-        Row(horizontalArrangement = Arrangement.spacedBy(GestoTheme.spacing.md)) {
-            GestoButton("Connect", onConnect, Modifier.weight(1f))
-            GestoOutlinedButton("Remove", onRemove, Modifier.weight(1f))
-        }
-    }
-}
-
 /** Collapses a long SHA fingerprint so it stays on one line. */
 fun shortFingerprint(value: String): String =
     if (value.length > 31) value.take(19) + "..." + value.takeLast(9) else value
@@ -169,20 +128,6 @@ private fun CardsPreviewBody() {
                 captureBackend = "wayland-screencast-portal",
             ),
             onClick = {},
-        )
-        TrustedHostCard(
-            host = TrustedHost(
-                id = "host-1",
-                hostName = "frumorn-laptop",
-                address = "192.168.1.77",
-                port = 47771,
-                fingerprint = "SHA256:aa11bb22cc33dd44ee55ff66aa77bb88cc99dd00",
-                deviceId = "device",
-                sessionToken = "token",
-                lastConnectedAt = 0L,
-            ),
-            onConnect = {},
-            onRemove = {},
         )
     }
 }

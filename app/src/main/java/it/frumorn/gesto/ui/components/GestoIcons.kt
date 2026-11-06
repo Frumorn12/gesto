@@ -49,6 +49,12 @@ object GestoIcons {
     }
     val Game: ImageVector by lazy { lineIcon("Game", rect(2, 7, 20, 11), "M7 10v5M4.5 12.5h5M15 11h1M18 14h1") }
     val Exit: ImageVector by lazy { lineIcon("Exit", "M10 4H4v16h6M14 8l4 4-4 4M18 12H9") }
+    /** Three small squares: the "⋯" of a card's menu. */
+    val More: ImageVector by lazy {
+        lineIcon("More", "M4.5 11.5h1v1h-1z", "M11.5 11.5h1v1h-1z", "M18.5 11.5h1v1h-1z")
+    }
+    /** The power symbol, for waking a PC. */
+    val Wake: ImageVector by lazy { lineIcon("Wake", "M12 3v8", "M7.5 6.5a7 7 0 1 0 9 0") }
 }
 
 private fun rect(x: Int, y: Int, w: Int, h: Int) = "M$x ${y}h${w}v${h}h-${w}z"
@@ -87,7 +93,7 @@ private fun GestoIconsPreview() = GestoPreviewSurface(darkTheme = false) {
                 .forEach { Icon(it, contentDescription = null) }
         }
         Row {
-            listOf(GestoIcons.Touch, GestoIcons.Quality, GestoIcons.Game, GestoIcons.Exit)
+            listOf(GestoIcons.Touch, GestoIcons.Quality, GestoIcons.Game, GestoIcons.Exit, GestoIcons.More, GestoIcons.Wake)
                 .forEach { Icon(it, contentDescription = null) }
         }
     }

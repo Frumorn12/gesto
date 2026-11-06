@@ -21,7 +21,18 @@ data class TrustedHost(
     val deviceId: String,
     val sessionToken: String,
     val lastConnectedAt: Long,
+    /** The name the user gave this PC; null shows the PC's own [hostName]. */
+    val displayName: String? = null,
+    /** MAC addresses of the PC's network cards, for Wake-on-LAN; reported by the daemon. */
+    val macAddresses: List<String> = emptyList(),
 )
+
+/** Longest name the user can give a PC. */
+const val MAX_PC_NAME_LENGTH = 40
+
+/** What the app calls this PC. */
+val TrustedHost.label: String
+    get() = displayName ?: hostName
 
 data class CapabilitySummary(
     val inputSupported: Boolean = false,
@@ -41,6 +52,8 @@ data class CapabilitySummary(
     val captureReason: String = "Not connected",
     val captureBackend: String = "unknown",
     val captureRequiresApproval: Boolean = false,
+    /** The PC can send its sound along with the screen. */
+    val audioSupported: Boolean = false,
     val volume: Boolean = false,
     val media: Boolean = false,
     val brightness: Boolean = false,

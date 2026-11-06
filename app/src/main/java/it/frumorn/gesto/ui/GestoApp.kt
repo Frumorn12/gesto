@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import it.frumorn.gesto.AddPcStep
 import it.frumorn.gesto.GestoUiState
@@ -42,6 +43,7 @@ import it.frumorn.gesto.ui.components.GestoPageBar
 import it.frumorn.gesto.ui.navigation.ScreensCapturingExternalPointer
 import it.frumorn.gesto.ui.screens.ControlsScreen
 import it.frumorn.gesto.ui.screens.DiscoveryScreen
+import it.frumorn.gesto.ui.screens.HomeScreen
 import it.frumorn.gesto.ui.screens.KeyboardScreen
 import it.frumorn.gesto.ui.screens.LaunchScreen
 import it.frumorn.gesto.ui.screens.PairingScreen
@@ -50,11 +52,11 @@ import it.frumorn.gesto.ui.screens.RemoteDisplayVideoSurface
 import it.frumorn.gesto.ui.screens.RemotePadScreen
 import it.frumorn.gesto.ui.screens.SettingsScreen
 import it.frumorn.gesto.ui.screens.TroubleshootingScreen
-import it.frumorn.gesto.ui.screens.TrustedHostsScreen
 import it.frumorn.gesto.ui.session.GestoSnackbarHost
 import it.frumorn.gesto.ui.session.SessionScaffold
 import it.frumorn.gesto.ui.system.ExternalPointerCaptureEffect
 import it.frumorn.gesto.ui.system.FullscreenSystemUiEffect
+import it.frumorn.gesto.ui.system.PcShortcutsEffect
 import it.frumorn.gesto.ui.system.RemoteScreenOrientationEffect
 import it.frumorn.gesto.ui.system.SystemBarsThemeEffect
 import it.frumorn.gesto.ui.system.findActivity
@@ -88,6 +90,13 @@ fun GestoApp(viewModel: GestoViewModel) {
             if (result == SnackbarResult.ActionPerformed && action != null) viewModel.onNoticeAction(action)
         }
     }
+    // The PCs list scans the network only while it is on screen and the app is in the foreground.
+    val homeVisible = state.screen == Screen.Home
+    LifecycleStartEffect(viewModel, homeVisible) {
+        viewModel.setPresenceScanning(homeVisible)
+        onStopOrDispose { viewModel.setPresenceScanning(false) }
+    }
+    PcShortcutsEffect(state.trustedHosts)
     val actions = rememberGestoActions(viewModel)
     GestoTheme(mode = state.themeMode, roundedCorners = state.roundedCorners) {
         SystemBarsThemeEffect(dark = state.themeMode.isDark())
@@ -247,8 +256,8 @@ private fun PlainPage(page: Screen, state: GestoUiState, actions: GestoActions) 
                     if (launch.hostName.isNotEmpty()) shown.value = launch
                     LaunchScreen(shown.value, actions.launch)
                 }
-                // Home and Add a PC still show the old screens until their redesign lands.
-                Screen.Home -> TrustedHostsScreen(state.toTrustedHostsState(), actions.trustedHosts)
+                Screen.Home -> HomeScreen(state.toHomeState(), actions.home)
+                // Add a PC still shows the old screens until its redesign lands.
                 Screen.AddPc -> when (state.addPcStep) {
                     AddPcStep.Code -> PairingScreen(state.toPairingState(), actions.pairing)
                     // Approval has no screen yet: nothing leads there before the PIN flow exists.

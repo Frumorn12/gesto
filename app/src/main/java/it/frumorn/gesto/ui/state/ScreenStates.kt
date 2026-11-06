@@ -9,7 +9,8 @@ import it.frumorn.gesto.core.model.DiscoveredHost
 import it.frumorn.gesto.core.model.ScreenSource
 import it.frumorn.gesto.core.model.ScreenStreamStats
 import it.frumorn.gesto.core.model.StreamSettings
-import it.frumorn.gesto.core.model.TrustedHost
+import it.frumorn.gesto.core.session.Presence
+import it.frumorn.gesto.ui.text.UiText
 
 /**
  * Immutable per-screen view state.
@@ -108,9 +109,24 @@ data class SettingsUiState(
     val gameMode: Boolean = false,
 )
 
+/** One paired PC on the PCs list. */
 @Immutable
-data class TrustedHostsUiState(
-    val trustedHosts: List<TrustedHost> = emptyList(),
+data class PcCardState(
+    val id: String,
+    /** The name the user gave the PC, or the PC's own. */
+    val name: String,
+    val presence: Presence,
+    /** This is the PC of the current session. */
+    val connected: Boolean,
+    /** Offline, and the PC told the app how to wake it. */
+    val canWake: Boolean,
+    /** What the PC can do, as short labels. */
+    val chips: List<UiText>,
+)
+
+@Immutable
+data class HomeUiState(
+    val pcs: List<PcCardState> = emptyList(),
 )
 
 @Immutable

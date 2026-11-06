@@ -3,11 +3,16 @@ package it.frumorn.gesto.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
+import it.frumorn.gesto.R
 import it.frumorn.gesto.Screen
 import it.frumorn.gesto.GestoUiState
 import it.frumorn.gesto.GestoViewModel
 import it.frumorn.gesto.core.externalinput.ExternalInputDeviceClass
+import it.frumorn.gesto.core.model.CapabilitySummary
 import it.frumorn.gesto.core.model.ConnectionState
+import it.frumorn.gesto.core.model.DiscoveredHost
+import it.frumorn.gesto.core.model.label
+import it.frumorn.gesto.core.session.Presence
 import it.frumorn.gesto.core.session.isLocalNetworkAddress
 import it.frumorn.gesto.sessionMode
 import it.frumorn.gesto.ui.state.ControlsActions
@@ -16,11 +21,14 @@ import it.frumorn.gesto.ui.state.DiagnosticsActions
 import it.frumorn.gesto.ui.state.DiagnosticsUiState
 import it.frumorn.gesto.ui.state.DiscoveryActions
 import it.frumorn.gesto.ui.state.DiscoveryUiState
+import it.frumorn.gesto.ui.state.HomeActions
+import it.frumorn.gesto.ui.state.HomeUiState
 import it.frumorn.gesto.ui.state.KeyboardActions
 import it.frumorn.gesto.ui.state.LaunchActions
 import it.frumorn.gesto.ui.state.LaunchUiState
 import it.frumorn.gesto.ui.state.PairingActions
 import it.frumorn.gesto.ui.state.PairingUiState
+import it.frumorn.gesto.ui.state.PcCardState
 import it.frumorn.gesto.ui.state.RemoteDisplayActions
 import it.frumorn.gesto.ui.state.RemoteDisplayUiState
 import it.frumorn.gesto.ui.state.RemotePadActions
@@ -29,8 +37,7 @@ import it.frumorn.gesto.ui.state.SessionActions
 import it.frumorn.gesto.ui.state.SessionUiState
 import it.frumorn.gesto.ui.state.SettingsActions
 import it.frumorn.gesto.ui.state.SettingsUiState
-import it.frumorn.gesto.ui.state.TrustedHostsActions
-import it.frumorn.gesto.ui.state.TrustedHostsUiState
+import it.frumorn.gesto.ui.text.UiText
 
 /**
  * The single seam between `GestoViewModel` and the UI tree.
@@ -53,7 +60,7 @@ class GestoActions(
     val keyboard: KeyboardActions = KeyboardActions(),
     val controls: ControlsActions = ControlsActions(),
     val settings: SettingsActions = SettingsActions(),
-    val trustedHosts: TrustedHostsActions = TrustedHostsActions(),
+    val home: HomeActions = HomeActions(),
     val diagnostics: DiagnosticsActions = DiagnosticsActions(),
 )
 
@@ -137,10 +144,16 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
             onOpenDiagnostics = { viewModel.go(Screen.Diagnostics) },
             onDisconnect = viewModel::disconnect,
         ),
-        trustedHosts = TrustedHostsActions(
-            onDiscoverNewHost = viewModel::startDiscovery,
-            onConnect = viewModel::connect,
-            onRemove = viewModel::removeTrustedHost,
+        home = HomeActions(
+            onConnect = viewModel::connectById,
+            onResume = viewModel::resumeSession,
+            onDisconnect = viewModel::disconnect,
+            onWake = viewModel::wake,
+            onRename = viewModel::rename,
+            onForget = viewModel::forget,
+            // Until the new Add a PC flow lands, this opens the old search screen.
+            onAddPc = viewModel::startDiscovery,
+            onOpenSettings = { viewModel.go(Screen.Settings) },
         ),
         diagnostics = DiagnosticsActions(
             onRefreshCapabilities = viewModel::refreshCapabilities,
@@ -149,7 +162,7 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
 }
 
 internal fun GestoUiState.toSessionState(): SessionUiState = SessionUiState(
-    hostName = connectedHost?.hostName.orEmpty(),
+    hostName = connectedHost?.label.orEmpty(),
     reconnecting = reconnecting || connectionState != ConnectionState.Connected,
     latencyMs = latencyMs,
     mode = screen.sessionMode ?: lastMode,
@@ -159,7 +172,7 @@ internal fun GestoUiState.toSessionState(): SessionUiState = SessionUiState(
 )
 
 internal fun GestoUiState.toLaunchState(): LaunchUiState = LaunchUiState(
-    hostName = launchHost?.hostName.orEmpty(),
+    hostName = launchHost?.label.orEmpty(),
     mode = lastMode,
     sameNetwork = launchHost?.address?.let(::isLocalNetworkAddress) ?: false,
 )
@@ -223,9 +236,36 @@ internal fun GestoUiState.toSettingsState(): SettingsUiState = SettingsUiState(
     gameMode = remoteScreenGameMode,
 )
 
-internal fun GestoUiState.toTrustedHostsState(): TrustedHostsUiState = TrustedHostsUiState(
-    trustedHosts = trustedHosts,
+/**
+ * The PCs list. The PC of the session is always Online; the others take the presence of the last
+ * scans. "Wake" is offered only for a PC that is Offline and told the app its MAC addresses.
+ */
+internal fun GestoUiState.toHomeState(): HomeUiState = HomeUiState(
+    pcs = trustedHosts.map { host ->
+        val connected = connectedHost?.id == host.id
+        val presence = if (connected) Presence.Online else presence[host.id] ?: Presence.Unknown
+        val seen = scannedHosts.firstOrNull { host.fingerprint.isNotBlank() && it.fingerprint == host.fingerprint }
+        PcCardState(
+            id = host.id,
+            name = host.label,
+            presence = presence,
+            connected = connected,
+            canWake = !connected && presence == Presence.Offline && host.macAddresses.isNotEmpty(),
+            // An Offline PC shows none: its capabilities are from a reply that is now old.
+            chips = if (presence == Presence.Offline) emptyList() else pcChips(seen, if (connected) capabilities else null),
+        )
+    },
 )
+
+/**
+ * What a PC can do, from the last scan that found it ([seen]) and, for the PC of the session, from
+ * what it reported on connecting ([session]). Only what is known to work is listed.
+ */
+internal fun pcChips(seen: DiscoveredHost?, session: CapabilitySummary?): List<UiText> = buildList {
+    if ((session?.captureSupported ?: seen?.captureSupported) == true) add(UiText.Res(R.string.home_chip_screen))
+    if (session?.audioSupported == true) add(UiText.Res(R.string.home_chip_audio))
+    if (session?.externalControllerSupported == true) add(UiText.Res(R.string.home_chip_controller))
+}
 
 internal fun GestoUiState.toDiagnosticsState(): DiagnosticsUiState = DiagnosticsUiState(
     connectionLabel = connectionState.name,

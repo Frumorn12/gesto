@@ -6,6 +6,7 @@ import android.net.LinkAddress
 import android.net.wifi.WifiManager
 import it.frumorn.gesto.core.model.DiscoveredHost
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.DatagramPacket
@@ -14,6 +15,26 @@ import java.net.Inet4Address
 import java.net.InetAddress
 
 private val ACCEPTED_SERVICES = setOf("gesto", "dev.waypad.daemon")
+
+/**
+ * Sent in every discovery round: the current probe, and the one from before the rename, which old
+ * daemons still waiting for it answer (current daemons answer both).
+ */
+val DISCOVERY_PROBES = listOf("GESTO_DISCOVER_V1", "WAYPAD_DISCOVER_V1")
+
+/**
+ * One entry per PC: a daemon answers each probe, and may answer on more than one address. PCs are
+ * told apart by fingerprint, or by address and port when a reply has none; the first reply wins.
+ */
+fun dedupeDiscoveredHosts(hosts: List<DiscoveredHost>): List<DiscoveredHost> =
+    hosts.distinctBy { host -> host.fingerprint.ifBlank { "${host.address}:${host.port}" } }
+
+/**
+ * The last reply of every PC seen so far: [found] (the latest scan) wins over [previous], and a PC
+ * a scan missed keeps its earlier reply, so what the cards show does not blink with one lost reply.
+ */
+fun mergeSightings(previous: List<DiscoveredHost>, found: List<DiscoveredHost>): List<DiscoveredHost> =
+    dedupeDiscoveredHosts(found + previous)
 
 /** Parses a discovery reply; returns null when [json] does not come from a known daemon. */
 fun parseDiscoveryReply(json: JSONObject, address: String): DiscoveredHost? {
@@ -35,7 +56,7 @@ class GestoDiscovery(context: Context) {
     private val appContext = context.applicationContext
 
     suspend fun discover(timeoutMillis: Int = 1800): List<DiscoveredHost> = withContext(Dispatchers.IO) {
-        val results = LinkedHashMap<String, DiscoveredHost>()
+        val results = ArrayList<DiscoveredHost>()
         val wifiLock = multicastLock()
         wifiLock?.setReferenceCounted(false)
         wifiLock?.acquire()
@@ -44,27 +65,29 @@ class GestoDiscovery(context: Context) {
                 socket.broadcast = true
                 socket.reuseAddress = true
                 socket.soTimeout = 350
-                val payload = "GESTO_DISCOVER_V1".toByteArray(Charsets.UTF_8)
+                val payloads = DISCOVERY_PROBES.map { it.toByteArray(Charsets.UTF_8) }
                 val targets = discoveryTargets()
                 repeat(3) {
                     targets.forEach { target ->
-                        val packet = DatagramPacket(payload, payload.size, target, 47770)
-                        socket.send(packet)
+                        payloads.forEach { payload ->
+                            socket.send(DatagramPacket(payload, payload.size, target, 47770))
+                        }
                     }
                     Thread.sleep(120)
                 }
 
                 val deadline = System.currentTimeMillis() + timeoutMillis
                 val buffer = ByteArray(4096)
-                while (System.currentTimeMillis() < deadline) {
+                // isActive: a scan that is no longer wanted stops listening at the next timeout.
+                while (isActive && System.currentTimeMillis() < deadline) {
                     try {
                         val reply = DatagramPacket(buffer, buffer.size)
                         socket.receive(reply)
-                        val json = JSONObject(String(reply.data, 0, reply.length, Charsets.UTF_8))
+                        val json = runCatching {
+                            JSONObject(String(reply.data, 0, reply.length, Charsets.UTF_8))
+                        }.getOrNull() ?: continue
                         val address = reply.address.hostAddress ?: continue
-                        parseDiscoveryReply(json, address)?.let { host ->
-                            results["${host.address}:${host.port}"] = host
-                        }
+                        parseDiscoveryReply(json, address)?.let(results::add)
                     } catch (_: java.net.SocketTimeoutException) {
                         // Continue until the overall discovery window closes.
                     }
@@ -73,8 +96,14 @@ class GestoDiscovery(context: Context) {
         } finally {
             if (wifiLock?.isHeld == true) wifiLock.release()
         }
-        results.values.toList()
+        dedupeDiscoveredHosts(results)
     }
+
+    /**
+     * Where a Wake-on-LAN packet goes: the limited broadcast plus the broadcast address of every
+     * IPv4 network the phone is on.
+     */
+    fun broadcastAddresses(): List<String> = discoveryTargets().mapNotNull { it.hostAddress }
 
     private fun multicastLock(): WifiManager.MulticastLock? {
         val wifi = appContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return null

@@ -44,4 +44,35 @@ class DiscoveryReplyTest {
     fun ignores_unknown_service() {
         assertNull(parseDiscoveryReply(reply("other"), "192.168.0.22"))
     }
+
+    @Test
+    fun both_probes_are_sent() {
+        assertEquals(listOf("GESTO_DISCOVER_V1", "WAYPAD_DISCOVER_V1"), DISCOVERY_PROBES)
+    }
+
+    private fun found(address: String, fingerprint: String, port: Int = 47771) =
+        parseDiscoveryReply(reply("gesto"), address)!!.copy(address = address, port = port, fingerprint = fingerprint)
+
+    @Test
+    fun one_pc_answering_twice_or_on_two_addresses_is_listed_once() {
+        val hosts = dedupeDiscoveredHosts(
+            listOf(found("192.168.0.22", "fp-1"), found("192.168.0.22", "fp-1"), found("10.0.0.4", "fp-1"), found("192.168.0.30", "fp-2")),
+        )
+        assertEquals(listOf("192.168.0.22" to "fp-1", "192.168.0.30" to "fp-2"), hosts.map { it.address to it.fingerprint })
+    }
+
+    @Test
+    fun sightings_keep_the_last_reply_of_each_pc_even_when_a_scan_misses_it() {
+        val old = listOf(found("192.168.0.22", "fp-1"), found("192.168.0.30", "fp-2"))
+        val merged = mergeSightings(old, listOf(found("192.168.0.99", "fp-1")))
+        assertEquals(listOf("192.168.0.99" to "fp-1", "192.168.0.30" to "fp-2"), merged.map { it.address to it.fingerprint })
+    }
+
+    @Test
+    fun without_a_fingerprint_the_address_and_port_tell_hosts_apart() {
+        val hosts = dedupeDiscoveredHosts(
+            listOf(found("192.168.0.22", ""), found("192.168.0.22", ""), found("192.168.0.22", "", port = 47772)),
+        )
+        assertEquals(listOf(47771, 47772), hosts.map { it.port })
+    }
 }

@@ -28,14 +28,21 @@ import it.frumorn.gesto.core.model.StreamProfile
 import it.frumorn.gesto.core.model.StreamSettings
 import it.frumorn.gesto.core.model.TrustedHost
 import it.frumorn.gesto.core.model.formatFps
+import it.frumorn.gesto.core.model.MAX_PC_NAME_LENGTH
+import it.frumorn.gesto.core.model.label
 import it.frumorn.gesto.core.video.RemoteScreenVideoSession
+import it.frumorn.gesto.core.network.ConnectResult
 import it.frumorn.gesto.core.network.GestoApiException
 import it.frumorn.gesto.core.network.GestoClient
+import it.frumorn.gesto.core.network.WakeOnLan
+import it.frumorn.gesto.core.network.mergeSightings
 import it.frumorn.gesto.core.network.RequestMayHaveRunException
 import it.frumorn.gesto.core.network.GestoDiscovery
 import it.frumorn.gesto.core.network.GestoInvite
 import it.frumorn.gesto.core.screen.RemoteScreenSessionEvent
 import it.frumorn.gesto.core.screen.RemoteScreenSessionMachine
+import it.frumorn.gesto.core.session.HostPresenceTracker
+import it.frumorn.gesto.core.session.Presence
 import it.frumorn.gesto.core.session.ReconnectPolicy
 import it.frumorn.gesto.core.session.launchTarget
 import it.frumorn.gesto.ui.text.UiText
@@ -89,6 +96,9 @@ val Screen.isSession: Boolean
 
 private val SettingsScreens = setOf(Screen.Settings, Screen.Advanced, Screen.Diagnostics)
 
+/** Intent extra (and `gesto://connect?host=` parameter) naming the paired PC to open on. */
+const val EXTRA_CONNECT_HOST = "it.frumorn.gesto.CONNECT_HOST"
+
 data class GestoUiState(
     val screen: Screen = Screen.Home,
     /** Where Settings was opened from, so back returns there. */
@@ -103,6 +113,10 @@ data class GestoUiState(
     val connectionState: ConnectionState = ConnectionState.Disconnected,
     val discoveredHosts: List<DiscoveredHost> = emptyList(),
     val trustedHosts: List<TrustedHost> = emptyList(),
+    /** Presence of each paired PC (by host id) while the PCs list scans the network. */
+    val presence: Map<String, Presence> = emptyMap(),
+    /** The last reply of each PC the presence scans found, for the capabilities on the PC cards. */
+    val scannedHosts: List<DiscoveredHost> = emptyList(),
     val selectedHost: DiscoveredHost? = null,
     val connectedHost: TrustedHost? = null,
     val capabilities: CapabilitySummary = CapabilitySummary(),
@@ -163,6 +177,12 @@ class GestoViewModel(
         const val HEALTH_PING_IDLE_MS = 1_000L
         const val HEALTH_PING_MAX_FAILURES = 2
         const val LAUNCH_TIMEOUT_MS = 6_000L
+        /** The PCs list scans the network this often while it is on screen. */
+        const val PRESENCE_INTERVAL_MS = 3_000L
+        /** How long one presence scan listens for replies. */
+        const val PRESENCE_LISTEN_MS = 1_200
+        /** Rest between two scans when one ran long, so the radio is never kept busy back to back. */
+        const val PRESENCE_MIN_GAP_MS = 500L
     }
 
     private val discovery = GestoDiscovery(application)
@@ -205,6 +225,8 @@ class GestoViewModel(
     private var launchTimeoutJob: Job? = null
     /** The PC a "Try again" on a notice connects to. */
     private var retryHostId: String? = null
+    private val presenceTracker = HostPresenceTracker()
+    private var presenceJob: Job? = null
 
     init {
         observeVideoSession()
@@ -241,9 +263,12 @@ class GestoViewModel(
                 _state.update { it.copy(lastMode = mode) }
             }
         }
-        // After process death the saved session wins; otherwise reopen on the last PC, if any.
+        // After process death the saved session wins; otherwise open the PC a launcher shortcut
+        // asked for (its intent extra arrives here as a default argument), else the last PC used.
         if (!restoreSessionState()) {
-            launchTarget(store.load())?.let(::launchConnect)
+            val hosts = store.load()
+            val requested = savedStateHandle.remove<String>(EXTRA_CONNECT_HOST)?.let { id -> hosts.find { it.id == id } }
+            (requested ?: launchTarget(hosts))?.let(::launchConnect)
         }
     }
 
@@ -273,11 +298,14 @@ class GestoViewModel(
         go(screen)
         viewModelScope.launch {
             runCatching { client.connect(host) }
-                .onSuccess { capabilities ->
+                .onSuccess { result ->
                     Log.i(TAG, "session_restore reconnected host=${host.hostName}")
+                    val updated = rememberConnection(host, result, touch = false)
                     _state.update {
                         it.copy(
-                            capabilities = capabilities,
+                            trustedHosts = store.load(),
+                            connectedHost = updated,
+                            capabilities = result.capabilities,
                             connectionState = ConnectionState.Connected,
                             status = "Reconnected to ${host.hostName}",
                             error = null,
@@ -340,7 +368,7 @@ class GestoViewModel(
             launchTimeoutJob?.cancel()
             launchTimeoutJob = null
             result
-                .onSuccess { capabilities -> onLaunchConnected(host, capabilities, mode) }
+                .onSuccess { result -> onLaunchConnected(host, result, mode) }
                 .onFailure { onLaunchFailed(host, it) }
         }
         launchTimeoutJob = viewModelScope.launch {
@@ -353,23 +381,38 @@ class GestoViewModel(
         }
     }
 
-    private fun onLaunchConnected(host: TrustedHost, capabilities: CapabilitySummary, mode: SessionMode) {
+    private fun onLaunchConnected(host: TrustedHost, result: ConnectResult, mode: SessionMode) {
         Log.i(TAG, "connection_state=connected launch=true host=${host.hostName} mode=$mode")
-        val updated = host.copy(lastConnectedAt = System.currentTimeMillis())
-        store.upsert(updated)
+        val updated = rememberConnection(host, result)
         savedStateHandle["connectedHostId"] = updated.id
         _state.update {
             it.copy(
                 trustedHosts = store.load(),
                 connectedHost = updated,
                 launchHost = null,
-                capabilities = capabilities,
+                capabilities = result.capabilities,
                 connectionState = ConnectionState.Connected,
                 status = "Connected to ${host.hostName}",
                 error = null,
             )
         }
         go(mode.screen)
+    }
+
+    /**
+     * Stores what a connection to [host] taught: when it was used ([touch]) and the PC's MAC
+     * addresses (kept from before when this daemon reports none). Works on the stored entry, so a
+     * rename made meanwhile is kept; a PC forgotten meanwhile is not stored again.
+     */
+    private fun rememberConnection(host: TrustedHost, result: ConnectResult, touch: Boolean = true): TrustedHost {
+        val macs = result.macAddresses
+        if (!touch && (macs.isEmpty() || macs == host.macAddresses)) return host
+        return store.update(host.id) { stored ->
+            stored.copy(
+                lastConnectedAt = if (touch) System.currentTimeMillis() else stored.lastConnectedAt,
+                macAddresses = macs.ifEmpty { stored.macAddresses },
+            )
+        } ?: host
     }
 
     private fun onLaunchFailed(host: TrustedHost, error: Throwable?) {
@@ -845,9 +888,12 @@ class GestoViewModel(
                 candidates = candidates,
                 deviceName = deviceName,
                 pairingCode = current.pairingCode,
-            ).onSuccess { (trusted, capabilities) ->
-                Log.i(TAG, "connection_state=connected paired_host=${trusted.hostName} input_backend=${capabilities.inputBackend}")
+            ).onSuccess { (paired, capabilities) ->
+                Log.i(TAG, "connection_state=connected paired_host=${paired.hostName} input_backend=${capabilities.inputBackend}")
                 pendingInvite = null
+                // Pairing the same PC again keeps the name the user gave it.
+                val previousName = store.load().firstOrNull { it.fingerprint == paired.fingerprint }?.displayName
+                val trusted = paired.copy(displayName = previousName)
                 store.upsert(trusted)
                 retryHostId = trusted.id
                 savedStateHandle["connectedHostId"] = trusted.id
@@ -923,31 +969,32 @@ class GestoViewModel(
         return Result.failure(lastFailure ?: IllegalStateException("No usable invite endpoints"))
     }
 
-    fun connect(host: TrustedHost) {
-        Log.i(TAG, "connection_state=connecting host=${host.hostName} address=${host.address}:${host.port}")
-        abandonLaunch()
-        retryHostId = host.id
-        _state.update { it.copy(connectionState = ConnectionState.Connecting, status = "Connecting to ${host.hostName}...", error = null) }
-        viewModelScope.launch {
-            runCatching { client.connect(host) }
-                .onSuccess { capabilities ->
-                    Log.i(TAG, "connection_state=connected host=${host.hostName} input_backend=${capabilities.inputBackend}")
-                    val updated = host.copy(lastConnectedAt = System.currentTimeMillis())
-                    store.upsert(updated)
-                    savedStateHandle["connectedHostId"] = updated.id
-                    _state.update {
-                        it.copy(
-                            trustedHosts = store.load(),
-                            connectedHost = updated,
-                            capabilities = capabilities,
-                            connectionState = ConnectionState.Connected,
-                            status = "Connected to ${host.hostName}",
-                        )
-                    }
-                    go(_state.value.lastMode.screen)
-                }
-                .onFailure { fail("Connection failed", it, ErrorContext.Connecting, host.port) }
+    /**
+     * Opens the paired PC with [id] through the launch screen (the PCs list, a launcher shortcut):
+     * the session if it is the PC already connected, nothing new if it is already being opened.
+     * A session with another PC is closed first.
+     */
+    fun connectById(id: String) {
+        val s = _state.value
+        val host = store.load().find { it.id == id }
+        if (host == null) {
+            Log.w(TAG, "connect_by_id unknown host")
+            go(Screen.Home)
+            return
         }
+        when {
+            s.connectedHost?.id == id -> go(s.lastMode.screen)
+            liveLaunch != 0L && s.launchHost?.id == id -> go(Screen.Launch)
+            else -> {
+                if (s.connectedHost != null) performDisconnect(cancelReconnect = true)
+                launchConnect(host)
+            }
+        }
+    }
+
+    /** "Back to the PC" on the PCs list: the session, on the mode last used. */
+    fun resumeSession() {
+        if (_state.value.connectedHost != null) go(_state.value.lastMode.screen)
     }
 
     fun disconnect() = performDisconnect(cancelReconnect = true)
@@ -993,9 +1040,86 @@ class GestoViewModel(
         if (home) go(Screen.Home)
     }
 
-    fun removeTrustedHost(id: String) {
+    /** Forgets the paired PC with [id], closing the session first if it is the one connected. */
+    fun forget(id: String) {
+        if (_state.value.connectedHost?.id == id) performDisconnect(cancelReconnect = true)
+        if (_state.value.launchHost?.id == id) go(Screen.Home)
         store.remove(id)
-        _state.update { it.copy(trustedHosts = store.load()) }
+        if (retryHostId == id) retryHostId = null
+        val hosts = store.load()
+        _state.update { it.copy(trustedHosts = hosts, presence = presenceTracker.presence(hosts)) }
+    }
+
+    /** Gives the PC with [id] the name [name]; a blank name, or the PC's own, goes back to the PC's own. */
+    fun rename(id: String, name: String) {
+        val updated = store.update(id) { host ->
+            val clean = name.trim().take(MAX_PC_NAME_LENGTH).takeIf { it.isNotEmpty() && it != host.hostName }
+            host.copy(displayName = clean)
+        } ?: return
+        _state.update {
+            it.copy(
+                trustedHosts = store.load(),
+                connectedHost = it.connectedHost?.let { host -> if (host.id == id) updated else host },
+                launchHost = it.launchHost?.let { host -> if (host.id == id) updated else host },
+            )
+        }
+    }
+
+    /** Sends the Wake-on-LAN packet to every network card the PC with [id] reported. */
+    fun wake(id: String) {
+        val host = store.load().find { it.id == id } ?: return
+        if (host.macAddresses.isEmpty()) return
+        viewModelScope.launch {
+            val targets = runCatching { discovery.broadcastAddresses() }.getOrDefault(listOf("255.255.255.255"))
+            val sent = host.macAddresses.count { mac ->
+                runCatching { WakeOnLan.send(mac, broadcast = targets) }
+                    .onFailure { if (it is CancellationException) throw it else Log.w(TAG, "wake_failed", it) }
+                    .isSuccess
+            }
+            Log.i(TAG, "wake host=${host.hostName} macs=${host.macAddresses.size} sent=$sent targets=${targets.size}")
+            emitNotice(
+                Notice(
+                    if (sent > 0) UiText.Res(R.string.notice_waking, listOf(host.label))
+                    else UiText.Res(R.string.notice_wake_failed, listOf(host.label)),
+                ),
+            )
+        }
+    }
+
+    /**
+     * Scans the network every [PRESENCE_INTERVAL_MS] while [on]: the PCs list turns it on while it is
+     * on screen and the app is in the foreground, and off otherwise.
+     */
+    fun setPresenceScanning(on: Boolean) {
+        if (!on) {
+            presenceJob?.cancel()
+            presenceJob = null
+            return
+        }
+        if (presenceJob?.isActive == true) return
+        presenceJob = viewModelScope.launch { runPresenceScans() }
+    }
+
+    private suspend fun runPresenceScans() {
+        while (true) {
+            val startedAt = System.nanoTime()
+            val found = try {
+                discovery.discover(timeoutMillis = PRESENCE_LISTEN_MS)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // No network at all: nothing answered, which is what the count of misses is for.
+                Log.d(TAG, "presence_scan_failed ${e.message}")
+                emptyList()
+            }
+            currentCoroutineContext().ensureActive()
+            val hosts = _state.value.trustedHosts
+            val seen = found.mapNotNullTo(HashSet()) { host -> host.fingerprint.takeIf { it.isNotBlank() } }
+            val presence = presenceTracker.onScan(seen, hosts)
+            _state.update { it.copy(presence = presence, scannedHosts = mergeSightings(it.scannedHosts, found)) }
+            val elapsed = (System.nanoTime() - startedAt) / 1_000_000
+            delay((PRESENCE_INTERVAL_MS - elapsed).coerceAtLeast(PRESENCE_MIN_GAP_MS))
+        }
     }
 
     fun prepareInput() = launchCommand("Requesting portal approval...") { client.prepareInput() }
@@ -1534,12 +1658,18 @@ class GestoViewModel(
             val wait = reconnectPolicy.nextDelay(attempt, elapsed) ?: break
             if (wait > 0) delay(wait)
             val result = runCatching { client.connect(host) }
-            val capabilities = result.getOrNull()
-            if (capabilities != null) {
+            val connected = result.getOrNull()
+            if (connected != null) {
+                val capabilities = connected.capabilities
                 Log.i(TAG, "connection_state=reconnected host=${host.hostName} input_backend=${capabilities.inputBackend}")
                 savedStateHandle["connectedHostId"] = host.id
+                val updated = rememberConnection(host, connected, touch = false)
+                val stored = updated !== host
                 _state.update {
                     it.copy(
+                        trustedHosts = if (stored) store.load() else it.trustedHosts,
+                        // Only a stored change replaces the session's PC: it may have been renamed meanwhile.
+                        connectedHost = if (stored && it.connectedHost?.id == updated.id) updated else it.connectedHost,
                         capabilities = capabilities,
                         connectionState = ConnectionState.Connected,
                         status = "Reconnected to ${host.hostName}",
@@ -1560,7 +1690,7 @@ class GestoViewModel(
         }
         // Gave up: back to the list, with a message that says why.
         val text = daemonVerdict(lastError, host.port)
-            ?: UiText.Res(R.string.error_connection_lost, listOf(host.hostName))
+            ?: UiText.Res(R.string.error_connection_lost, listOf(host.label))
         performDisconnect(cancelReconnect = false)
         emitNotice(Notice(text, NoticeAction.Retry))
         return false
@@ -1575,7 +1705,7 @@ class GestoViewModel(
         ?.let { ErrorTranslator.translate(it, ErrorContext.Connecting, port) }
 
     private fun connectFailureText(host: TrustedHost, error: Throwable?): UiText =
-        daemonVerdict(error, host.port) ?: UiText.Res(R.string.notice_pc_not_answering, listOf(host.hostName))
+        daemonVerdict(error, host.port) ?: UiText.Res(R.string.notice_pc_not_answering, listOf(host.label))
 
     /** Pings the PC every few seconds while connected and idle; two misses in a row mean a dead link. */
     private suspend fun runHealthPing() {
@@ -1891,6 +2021,7 @@ class GestoViewModel(
         // client drop whatever channel it opens from now on.
         liveLaunch = 0L
         launchTimeoutJob?.cancel()
+        presenceJob?.cancel()
         client.shutdown()
         super.onCleared()
     }

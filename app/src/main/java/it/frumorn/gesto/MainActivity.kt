@@ -40,13 +40,14 @@ class MainActivity : ComponentActivity() {
         setContent {
             GestoApp(viewModel)
         }
-        handleInviteIntent(intent)
+        // After process death the system hands back the same intent: it was handled already.
+        if (savedInstanceState == null) handleLinkIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        handleInviteIntent(intent)
+        handleLinkIntent(intent)
     }
 
     override fun onStart() {
@@ -90,13 +91,24 @@ class MainActivity : ComponentActivity() {
         return handled
     }
 
-    private fun handleInviteIntent(intent: Intent?) {
+    /** `gesto://invite` (and the old `waypad://invite`) pairs; `gesto://connect?host=` opens a PC. */
+    private fun handleLinkIntent(intent: Intent?) {
         val data = intent?.dataString ?: return
-        if (data.startsWith("gesto://invite") || data.startsWith("waypad://invite")) {
-            Log.i(TAG, "qr_invite_intent")
-            viewModel.applyInvite(data)
-            intent.data = null
+        when {
+            data.startsWith("gesto://invite") || data.startsWith("waypad://invite") -> {
+                Log.i(TAG, "qr_invite_intent")
+                viewModel.applyInvite(data)
+            }
+            data.startsWith("gesto://connect") -> {
+                val hostId = intent.data?.getQueryParameter("host")
+                Log.i(TAG, "connect_intent known=${hostId != null}")
+                hostId?.let(viewModel::connectById)
+            }
+            else -> return
         }
+        // Handled once: a rotation recreates the activity with the same intent.
+        intent.data = null
+        intent.removeExtra(EXTRA_CONNECT_HOST)
     }
 
     private fun handleControllerRevealShortcut(event: KeyEvent): Boolean {
