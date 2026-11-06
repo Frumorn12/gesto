@@ -112,6 +112,11 @@ fun GestoApp(viewModel: GestoViewModel) {
         viewModel.setAddPcScanning(searching)
         onStopOrDispose { viewModel.setAddPcScanning(false) }
     }
+    // The remote screen and its sound stop while the app is in the background, and come back with it.
+    LifecycleStartEffect(viewModel) {
+        viewModel.onAppStarted()
+        onStopOrDispose { viewModel.onAppStopped() }
+    }
     PcShortcutsEffect(state.trustedHosts)
     val actions = rememberGestoActions(viewModel)
     GestoTheme(mode = state.themeMode, roundedCorners = state.roundedCorners) {

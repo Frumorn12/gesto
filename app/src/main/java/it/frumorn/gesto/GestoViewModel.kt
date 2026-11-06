@@ -40,6 +40,7 @@ import it.frumorn.gesto.core.model.formatFps
 import it.frumorn.gesto.core.model.MAX_PC_NAME_LENGTH
 import it.frumorn.gesto.core.model.label
 import it.frumorn.gesto.core.video.AutoQualityController
+import it.frumorn.gesto.core.video.KeyFrameRequestGate
 import it.frumorn.gesto.core.video.RemoteScreenVideoSession
 import it.frumorn.gesto.core.video.StreamDelay
 import it.frumorn.gesto.core.network.ConnectResult
@@ -264,6 +265,10 @@ class GestoViewModel(
     private var interactionEndJob: Job? = null
     private var screenStreamJob: Job? = null
     private var screenStreamDesired = false
+    /** The app is on screen: between ON_START and ON_STOP of the activity. */
+    private var appStarted = true
+    /** A decoder that keeps asking for a keyframe asks the PC at most once a second. */
+    private val keyFrameGate = KeyFrameRequestGate()
     /** Steps the Automatic quality down while the network can't keep up; reset for every session. */
     private val autoQuality = AutoQualityController()
     /** Whether this stream's frames queue up on the way (the network falls behind). */
@@ -653,10 +658,30 @@ class GestoViewModel(
      */
     private fun autoStartScreenStream() {
         val s = _state.value
-        if (s.screen != Screen.Display || s.connectionState != ConnectionState.Connected) return
-        if (!s.capabilities.captureSupported || screenStreamDesired) return
+        if (!shouldAutoStartStream(s.screen, s.connectionState, s.capabilities.captureSupported, screenStreamDesired, appStarted)) return
         Log.i(TAG, "screen_stream_auto_start")
         startScreenStream()
+    }
+
+    /**
+     * ON_STOP: the app went to the background. The PC stops capturing and encoding its screen, and
+     * the phone stops playing its sound; nobody is looking. A reconnect meanwhile does not start them.
+     */
+    fun onAppStopped() {
+        appStarted = false
+        videoSession.renderer.audio.pausePlayback()
+        if (screenStreamDesired || _state.value.screenStreaming) {
+            Log.i(TAG, "screen_stream_background_stop")
+            stopScreenStream()
+        }
+    }
+
+    /** ON_START: back in the foreground, the Screen shows the PC's screen (and sound) again. */
+    fun onAppStarted() {
+        appStarted = true
+        if (_state.value.screen != Screen.Display) return
+        videoSession.renderer.audio.resumePlayback()
+        autoStartScreenStream()
     }
 
     /**
@@ -1997,6 +2022,17 @@ class GestoViewModel(
      * republishes them. The first decoded frame is what moves the session out of `Negotiating`.
      */
     private fun observeVideoSession() {
+        // Called on the decoder's thread, e.g. after its surface was rebuilt mid-stream.
+        videoSession.onKeyFrameNeeded = {
+            val sessionId = _state.value.screenStreamInfo?.sessionId
+            if (sessionId != null && keyFrameGate.tryRequest(monotonicMs())) {
+                viewModelScope.launch {
+                    runCatching { client.requestKeyFrame(sessionId) }
+                        .onSuccess { Log.i(TAG, "key_frame_requested session=$sessionId") }
+                        .onFailure { if (it is CancellationException) throw it else Log.w(TAG, "key_frame_request_failed", it) }
+                }
+            }
+        }
         videoSession.onFirstFrame = {
             _state.update {
                 it.copy(
@@ -2702,6 +2738,20 @@ internal fun Throwable.isTransportFailure(): Boolean {
         "socket closed" in text ||
         "not connected" in text
 }
+
+/**
+ * Whether the Screen starts its stream by itself now: it is on screen with the app in the
+ * foreground ([appStarted]), the PC is connected and can share its screen, and no stream is
+ * wanted yet ([streamWanted]).
+ */
+internal fun shouldAutoStartStream(
+    screen: Screen,
+    connectionState: ConnectionState,
+    captureSupported: Boolean,
+    streamWanted: Boolean,
+    appStarted: Boolean,
+): Boolean = appStarted && screen == Screen.Display && connectionState == ConnectionState.Connected &&
+    captureSupported && !streamWanted
 
 /** Scanning for hosts never changes the state of a session that is held: only an idle app moves. */
 internal fun GestoUiState.stateDuringDiscovery(idle: ConnectionState): ConnectionState =

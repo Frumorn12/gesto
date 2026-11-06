@@ -305,6 +305,11 @@ class GestoClient {
      * The phone silences playback on its own the moment the user asks, so this is not what makes
      * it quiet — it is what stops the host burning bandwidth on audio nobody is listening to.
      */
+    /** Asks for a keyframe on the stream [sessionId]: a decoder rebuilt mid-stream stays black until one. */
+    suspend fun requestKeyFrame(sessionId: String) {
+        command("request_key_frame", JSONObject().put("session_id", sessionId))
+    }
+
     suspend fun setDesktopAudioMute(sessionId: String, muted: Boolean) {
         command(
             "set_desktop_audio_mute",
