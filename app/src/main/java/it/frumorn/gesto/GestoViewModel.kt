@@ -62,7 +62,9 @@ import it.frumorn.gesto.core.screen.RemoteScreenSessionMachine
 import it.frumorn.gesto.core.session.HostPresenceTracker
 import it.frumorn.gesto.core.session.Presence
 import it.frumorn.gesto.core.session.ReconnectPolicy
+import it.frumorn.gesto.core.session.connectAddresses
 import it.frumorn.gesto.core.session.launchTarget
+import it.frumorn.gesto.core.session.movedHosts
 import it.frumorn.gesto.ui.text.UiText
 import it.frumorn.gesto.core.storage.SettingsRepository
 import it.frumorn.gesto.core.storage.TrustedHostStore
@@ -418,10 +420,10 @@ class GestoViewModel(
         }
         go(screen)
         viewModelScope.launch {
-            runCatching { client.connect(host) }
-                .onSuccess { result ->
+            runCatching { connectAnyAddress(host) }
+                .onSuccess { (reached, result) ->
                     Log.i(TAG, "session_restore reconnected host=${host.hostName}")
-                    val updated = rememberConnection(host, result, touch = false)
+                    val updated = rememberConnection(reached, result, touch = false)
                     _state.update {
                         it.copy(
                             trustedHosts = store.load(),
@@ -478,7 +480,7 @@ class GestoViewModel(
         viewModelScope.launch {
             // Read in parallel with the handshake so the saved mode is known when it ends.
             val savedMode = async { runCatching { settingsRepo.lastMode.first() }.getOrDefault(SessionMode.Touchpad) }
-            val result = runCatching { client.connect(host) }
+            val result = runCatching { connectAnyAddress(host) }
             if (result.exceptionOrNull() is CancellationException) return@launch
             val mode = if (result.isSuccess) savedMode.await() else SessionMode.Touchpad
             if (liveLaunch != attempt) {
@@ -490,7 +492,7 @@ class GestoViewModel(
             launchTimeoutJob?.cancel()
             launchTimeoutJob = null
             result
-                .onSuccess { result -> onLaunchConnected(host, result, mode) }
+                .onSuccess { (reached, connected) -> onLaunchConnected(reached, connected, mode) }
                 .onFailure { onLaunchFailed(host, it) }
         }
         launchTimeoutJob = viewModelScope.launch {
@@ -1120,6 +1122,7 @@ class GestoViewModel(
                 val previous = lastAddPcScan
                 lastAddPcScan = found
                 _state.update { it.copy(discoveredHosts = AddPcFlow.searchResults(it.discoveredHosts, previous, found)) }
+                followMovedHosts(found)
             }
         }
     }
@@ -1612,8 +1615,63 @@ class GestoViewModel(
                 val seen = found.mapNotNullTo(HashSet()) { host -> host.fingerprint.takeIf { it.isNotBlank() } }
                 val presence = presenceTracker.onScan(seen, hosts)
                 _state.update { it.copy(presence = presence, scannedHosts = mergeSightings(it.scannedHosts, found)) }
+                followMovedHosts(found)
             }
         }
+    }
+
+    /**
+     * A paired PC the scan found at another address (its DHCP lease changed): the stored address
+     * follows it, so Connect, the launch and the reconnects dial where it is now.
+     */
+    private fun followMovedHosts(found: List<DiscoveredHost>) {
+        val moved = movedHosts(_state.value.trustedHosts, found)
+        if (moved.isEmpty()) return
+        moved.forEach { host ->
+            Log.i(TAG, "host_moved host=${host.hostName} address=${host.address}:${host.port}")
+            store.update(host.id) { it.copy(address = host.address, port = host.port) }
+        }
+        refreshStoredHosts()
+    }
+
+    /** Reloads the paired PCs, and the session's and the launch's PC with them. */
+    private fun refreshStoredHosts() {
+        val hosts = store.load()
+        _state.update { s ->
+            s.copy(
+                trustedHosts = hosts,
+                connectedHost = s.connectedHost?.let { c -> hosts.find { it.id == c.id } ?: c },
+                launchHost = s.launchHost?.let { l -> hosts.find { it.id == l.id } ?: l },
+            )
+        }
+    }
+
+    /**
+     * Opens the session with [host]: first at the address the latest scan saw it at, when that
+     * differs from the stored one, then at the stored one. Only a link failure moves on to the next
+     * address; the PC's own refusal is final. The handshake checks the PC's fingerprint at every
+     * address. Returns [host] as reached (with the address that answered, now stored) and the result.
+     */
+    private suspend fun connectAnyAddress(host: TrustedHost): Pair<TrustedHost, ConnectResult> {
+        var failure: Throwable? = null
+        for (candidate in connectAddresses(host, _state.value.scannedHosts)) {
+            try {
+                val result = client.connect(candidate)
+                if (candidate.address != host.address || candidate.port != host.port) {
+                    Log.i(TAG, "connect_moved host=${host.hostName} address=${candidate.address}:${candidate.port}")
+                    store.update(host.id) { it.copy(address = candidate.address, port = candidate.port) }
+                    refreshStoredHosts()
+                }
+                return candidate to result
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                failure = e
+                if (!e.isTransportFailure()) throw e
+                Log.w(TAG, "connect_address_failed address=${candidate.address}:${candidate.port} message=${e.message}")
+            }
+        }
+        throw failure ?: IllegalStateException("No address to connect to")
     }
 
     /** Scans the network every [PRESENCE_INTERVAL_MS] until cancelled, handing each result to [onScan]. */
@@ -2236,13 +2294,14 @@ class GestoViewModel(
             val elapsed = (System.nanoTime() - startedAt) / 1_000_000
             val wait = reconnectPolicy.nextDelay(attempt, elapsed) ?: break
             if (wait > 0) delay(wait)
-            val result = runCatching { client.connect(host) }
-            val connected = result.getOrNull()
-            if (connected != null) {
+            val result = runCatching { connectAnyAddress(host) }
+            val reached = result.getOrNull()
+            if (reached != null) {
+                val (at, connected) = reached
                 val capabilities = connected.capabilities
                 Log.i(TAG, "connection_state=reconnected host=${host.hostName} input_backend=${capabilities.inputBackend}")
                 savedStateHandle["connectedHostId"] = host.id
-                val updated = rememberConnection(host, connected, touch = false)
+                val updated = rememberConnection(at, connected, touch = false)
                 val stored = updated !== host
                 _state.update {
                     it.copy(
