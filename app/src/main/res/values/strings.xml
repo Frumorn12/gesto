@@ -7,6 +7,7 @@
     <string name="notice_pc_not_answering">%1$s isn\'t answering.</string>
     <string name="action_retry">Try again</string>
     <string name="action_use_code">Use a code</string>
+    <string name="action_add_again">Add again</string>
     <string name="action_back">Back</string>
     <string name="action_settings">Settings</string>
 
@@ -16,6 +17,7 @@
     <string name="home_state_online">Online · same network</string>
     <string name="home_state_offline">Offline</string>
     <string name="home_state_looking">Looking…</string>
+    <string name="home_state_unpaired">No longer paired</string>
     <string name="home_connect">Connect</string>
     <string name="home_resume">Back to the PC</string>
     <string name="home_wake">Wake</string>
@@ -134,7 +136,10 @@
     <string name="error_approval_unavailable">This PC can\'t show the request. Use the code instead.</string>
     <string name="error_pairing_busy">The PC is already answering another phone. Try again in a moment.</string>
     <string name="error_unknown_app">That app is no longer set up on the PC.</string>
-    <string name="error_session_expired">This phone is no longer paired with the PC. Pair it again.</string>
+    <string name="error_session_expired">The session with the PC ended. Connect again.</string>
+    <string name="error_phone_unpaired">This phone is no longer paired with %1$s. Add it again.</string>
+    <string name="error_phone_unpaired_this_pc">This phone is no longer paired with this PC. Add it again.</string>
+    <string name="error_pc_busy">The PC is busy. Try again in a moment.</string>
     <string name="error_connection_lost">Lost the connection to %1$s.</string>
     <string name="error_generic">Something went wrong: %1$s</string>
     <string name="error_input_not_approved">The PC hasn\'t approved control from this phone yet.</string>

@@ -69,4 +69,16 @@ class TrustedHostCodecTest {
     @Test fun empty_list_round_trips() {
         assertEquals(emptyList<TrustedHost>(), TrustedHostCodec.decode(TrustedHostCodec.encode(emptyList())))
     }
+
+    @Test fun a_pc_that_needs_pairing_again_stays_marked() {
+        val revoked = host.copy(needsRepair = true)
+        assertTrue(TrustedHostCodec.decode(TrustedHostCodec.encode(listOf(revoked))).single().needsRepair)
+        assertEquals(false, TrustedHostCodec.decode(TrustedHostCodec.encode(listOf(host))).single().needsRepair)
+    }
+
+    @Test fun pairing_again_clears_the_mark() {
+        val revoked = host.copy(needsRepair = true)
+        val repaired = host.copy(sessionToken = "token-2")
+        assertEquals(listOf(repaired), upsertInPlace(listOf(revoked), repaired))
+    }
 }

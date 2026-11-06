@@ -25,6 +25,11 @@ data class TrustedHost(
     val displayName: String? = null,
     /** MAC addresses of the PC's network cards, for Wake-on-LAN; reported by the daemon. */
     val macAddresses: List<String> = emptyList(),
+    /**
+     * The PC no longer knows this phone (revoked there, or its daemon lost its list): connecting
+     * cannot work until the phone is added again.
+     */
+    val needsRepair: Boolean = false,
 )
 
 /** Longest name the user can give a PC. */

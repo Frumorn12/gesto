@@ -103,4 +103,12 @@ class HomeStateTest {
         ).toHomeState().pcs.single()
         assertEquals(emptyList<UiText>(), card.chips)
     }
+
+    @Test fun a_pc_that_no_longer_knows_the_phone_offers_to_be_added_again() {
+        val a = host("a").copy(needsRepair = true)
+        val b = host("b")
+        val cards = GestoUiState(trustedHosts = listOf(a, b)).toHomeState().pcs
+        assertTrue(cards[0].needsRepair)
+        assertFalse(cards[1].needsRepair)
+    }
 }

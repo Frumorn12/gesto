@@ -87,6 +87,7 @@ fun HomeScreen(
                         onResume = actions.onResume,
                         onDisconnect = actions.onDisconnect,
                         onWake = { actions.onWake(pc.id) },
+                        onRepair = { actions.onRepair(pc.id) },
                         onRename = { renaming = pc.id },
                         onForget = { forgetting = pc.id },
                         modifier = Modifier.animateItem(

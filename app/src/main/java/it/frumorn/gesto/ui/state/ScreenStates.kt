@@ -214,6 +214,8 @@ data class PcCardState(
     val canWake: Boolean,
     /** What the PC can do, as short labels. */
     val chips: List<UiText>,
+    /** The PC no longer knows this phone: it can only be added again (or forgotten). */
+    val needsRepair: Boolean = false,
 )
 
 @Immutable

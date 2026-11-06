@@ -2,7 +2,13 @@ package it.frumorn.gesto.core.model
 
 import it.frumorn.gesto.ui.text.UiText
 
-enum class NoticeAction { Retry, OpenPcs, UseCode }
+enum class NoticeAction {
+    Retry,
+    OpenPcs,
+    UseCode,
+    /** Add a PC again, the one that no longer knows this phone. */
+    AddAgain,
+}
 
 /** A short message for the user, shown once (snackbar). */
 data class Notice(val text: UiText, val action: NoticeAction? = null, val id: Long = System.nanoTime())

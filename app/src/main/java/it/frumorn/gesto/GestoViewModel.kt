@@ -443,7 +443,7 @@ class GestoViewModel(
                     go(Screen.Home)
                     savedStateHandle["connectedHostId"] = null
                     savedStateHandle["screen"] = null
-                    emitNotice(Notice(connectFailureText(host, throwable), NoticeAction.Retry))
+                    emitNotice(connectFailureNotice(host, throwable))
                 }
         }
         return true
@@ -542,7 +542,7 @@ class GestoViewModel(
             )
         }
         go(Screen.Home)
-        emitNotice(Notice(connectFailureText(host, error), NoticeAction.Retry))
+        emitNotice(connectFailureNotice(host, error))
     }
 
     /** Stops waiting for the launch connection; the attempt ends in the background and is dropped. */
@@ -589,6 +589,7 @@ class GestoViewModel(
     fun onNoticeAction(action: NoticeAction) {
         when (action) {
             NoticeAction.Retry -> retryLastConnection()
+            NoticeAction.AddAgain -> retryHostId?.let(::repairHost)
             NoticeAction.OpenPcs -> go(Screen.Home)
             NoticeAction.UseCode -> {
                 go(Screen.AddPc)
@@ -1436,6 +1437,35 @@ class GestoViewModel(
         }
     }
 
+    /**
+     * "Add again" for the PC with [id], which no longer knows this phone: Add a PC opens straight on
+     * that PC (at the address a scan last saw it at, pinned to its identity), with the PIN when its
+     * daemon can ask on the PC, else the code.
+     */
+    fun repairHost(id: String) {
+        val host = store.load().find { it.id == id } ?: return
+        val seen = _state.value.scannedHosts.firstOrNull { host.fingerprint.isNotBlank() && it.fingerprint == host.fingerprint }
+        Log.i(TAG, "repair_host host=${host.hostName} seen=${seen != null}")
+        startAddPc()
+        val target = DiscoveredHost(
+            hostName = host.hostName,
+            address = seen?.address ?: host.address,
+            port = seen?.port ?: host.port,
+            fingerprint = host.fingerprint,
+            inputSupported = false,
+            inputBackend = "repair",
+            captureSupported = false,
+            captureBackend = "repair",
+            // Not known without a scan: asked first, the code follows if the daemon is old.
+            approvalPairing = seen?.approvalPairing ?: true,
+        )
+        _state.update { it.copy(selectedHost = target, pairingCode = "") }
+        when (AddPcFlow.firstStepFor(target)) {
+            AddPcStep.Approval -> requestApprovalPairing()
+            else -> setAddPcStep(AddPcStep.Code)
+        }
+    }
+
     /** "Back to the PC" on the PCs list: the session, on the mode last used. */
     fun resumeSession() {
         if (_state.value.connectedHost != null) go(_state.value.lastMode.screen)
@@ -2197,10 +2227,9 @@ class GestoViewModel(
             attempt++
         }
         // Gave up: back to the list, with a message that says why.
-        val text = daemonVerdict(lastError, host.port)
-            ?: UiText.Res(R.string.error_connection_lost, listOf(host.label))
+        val notice = connectFailureNotice(host, lastError, UiText.Res(R.string.error_connection_lost, listOf(host.label)))
         performDisconnect(cancelReconnect = false)
-        emitNotice(Notice(text, NoticeAction.Retry))
+        emitNotice(notice)
         return false
     }
 
@@ -2208,12 +2237,31 @@ class GestoViewModel(
      * The daemon's own reason when it turned the connection down (session expired, identity
      * changed...); null when the PC simply did not answer.
      */
-    private fun daemonVerdict(error: Throwable?, port: Int): UiText? = error
+    private fun daemonVerdict(error: Throwable?, host: TrustedHost): UiText? = error
         ?.takeIf { it is GestoApiException || it.message?.contains("fingerprint", ignoreCase = true) == true }
-        ?.let { ErrorTranslator.translate(it, ErrorContext.Connecting, port) }
+        ?.let { ErrorTranslator.translate(it, ErrorContext.Connecting, host.port, host.label) }
 
-    private fun connectFailureText(host: TrustedHost, error: Throwable?): UiText =
-        daemonVerdict(error, host.port) ?: UiText.Res(R.string.notice_pc_not_answering, listOf(host.label))
+    /**
+     * The notice for a connection to [host] that failed with [error]; [fallback] when the PC simply
+     * did not answer. "Try again" is offered, except to a PC that no longer knows this phone: that
+     * one is marked as such, and the notice offers to add it again.
+     */
+    private fun connectFailureNotice(
+        host: TrustedHost,
+        error: Throwable?,
+        fallback: UiText = UiText.Res(R.string.notice_pc_not_answering, listOf(host.label)),
+    ): Notice {
+        val action = ErrorTranslator.connectAction(error)
+        if (action == NoticeAction.AddAgain) markNeedsRepair(host.id)
+        return Notice(daemonVerdict(error, host) ?: fallback, action)
+    }
+
+    /** The PC with [id] refused this phone's token: it stays listed, offering to be added again. */
+    private fun markNeedsRepair(id: String) {
+        val updated = store.update(id) { it.copy(needsRepair = true) } ?: return
+        Log.i(TAG, "host_needs_repair host=${updated.hostName}")
+        _state.update { it.copy(trustedHosts = store.load()) }
+    }
 
     /** Pings the PC every few seconds while connected and idle; two misses in a row mean a dead link. */
     private suspend fun runHealthPing() {

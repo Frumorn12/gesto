@@ -47,4 +47,11 @@ class LaunchDecisionTest {
             assertFalse(address, isLocalNetworkAddress(address))
         }
     }
+
+    @Test fun a_pc_that_no_longer_knows_the_phone_is_not_opened_at_launch() {
+        val a = host("a", 10)
+        val b = host("b", 30).copy(needsRepair = true)
+        assertSame(a, launchTarget(listOf(a, b)))
+        assertNull(launchTarget(listOf(b)))
+    }
 }

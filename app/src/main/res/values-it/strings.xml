@@ -7,6 +7,7 @@
     <string name="notice_pc_not_answering">%1$s non risponde.</string>
     <string name="action_retry">Riprova</string>
     <string name="action_use_code">Usa un codice</string>
+    <string name="action_add_again">Aggiungi di nuovo</string>
     <string name="action_back">Indietro</string>
     <string name="action_settings">Impostazioni</string>
 
@@ -16,6 +17,7 @@
     <string name="home_state_online">Acceso · stessa rete</string>
     <string name="home_state_offline">Spento</string>
     <string name="home_state_looking">Cerco…</string>
+    <string name="home_state_unpaired">Non più accoppiato</string>
     <string name="home_connect">Collega</string>
     <string name="home_resume">Torna al PC</string>
     <string name="home_wake">Sveglia</string>
@@ -133,7 +135,10 @@
     <string name="error_approval_unavailable">Questo PC non può mostrare la richiesta. Usa il codice.</string>
     <string name="error_pairing_busy">Il PC sta già rispondendo a un altro telefono. Riprova tra poco.</string>
     <string name="error_unknown_app">Quell\'app non è più configurata sul PC.</string>
-    <string name="error_session_expired">Questo telefono non è più accoppiato con il PC. Accoppialo di nuovo.</string>
+    <string name="error_session_expired">La sessione con il PC è finita. Collegati di nuovo.</string>
+    <string name="error_phone_unpaired">Questo telefono non è più accoppiato con %1$s. Aggiungilo di nuovo.</string>
+    <string name="error_phone_unpaired_this_pc">Questo telefono non è più accoppiato con questo PC. Aggiungilo di nuovo.</string>
+    <string name="error_pc_busy">Il PC è occupato. Riprova tra poco.</string>
     <string name="error_connection_lost">Connessione con %1$s persa.</string>
     <string name="error_generic">Qualcosa non ha funzionato: %1$s</string>
     <string name="error_input_not_approved">Il PC non ha ancora approvato il controllo da questo telefono.</string>

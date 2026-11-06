@@ -61,6 +61,7 @@ fun PcCard(
     onRename: () -> Unit,
     onForget: () -> Unit,
     modifier: Modifier = Modifier,
+    onRepair: () -> Unit = {},
 ) {
     val spacing = GestoTheme.spacing
     val shape = MaterialTheme.shapes.extraSmall
@@ -93,7 +94,7 @@ fun PcCard(
             CardMenu(name = state.name, onRename = onRename, onForget = onForget)
         }
         if (state.chips.isNotEmpty()) Chips(state.chips)
-        CardActions(state, onConnect, onResume, onDisconnect, onWake)
+        CardActions(state, onConnect, onResume, onDisconnect, onWake, onRepair)
     }
 }
 
@@ -130,6 +131,7 @@ private data class Status(val text: Int, val on: Boolean)
 
 private fun statusOf(state: PcCardState): Status = when {
     state.connected -> Status(R.string.session_connected, on = true)
+    state.needsRepair -> Status(R.string.home_state_unpaired, on = false)
     state.presence == Presence.Online -> Status(R.string.home_state_online, on = true)
     state.presence == Presence.Offline -> Status(R.string.home_state_offline, on = false)
     else -> Status(R.string.home_state_looking, on = false)
@@ -209,6 +211,7 @@ private fun CardActions(
     onResume: () -> Unit,
     onDisconnect: () -> Unit,
     onWake: () -> Unit,
+    onRepair: () -> Unit,
 ) {
     val spacing = GestoTheme.spacing
     val full = Modifier.fillMaxWidth()
@@ -217,6 +220,8 @@ private fun CardActions(
             GestoButton(stringResource(R.string.home_resume), onResume, full, icon = GestoIcons.Touchpad)
             GestoOutlinedButton(stringResource(R.string.quick_disconnect), onDisconnect, full)
         }
+        // Connecting would only be refused: the PC has to let the phone in again.
+        state.needsRepair -> GestoButton(stringResource(R.string.action_add_again), onRepair, full)
         state.presence == Presence.Offline -> if (state.canWake) {
             Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
                 GestoOutlinedButton(stringResource(R.string.home_wake), onWake, Modifier.weight(1f), icon = GestoIcons.Wake)
@@ -252,6 +257,7 @@ private fun PcCardPreviewBody() {
             PcCardState("2", "Desk PC", Presence.Online, connected = false, canWake = false, chips = previewChips.take(1)),
             PcCardState("3", "Living room", Presence.Offline, connected = false, canWake = true, chips = emptyList()),
             PcCardState("4", "Laptop", Presence.Unknown, connected = false, canWake = false, chips = emptyList()),
+            PcCardState("5", "Office", Presence.Online, connected = false, canWake = false, chips = emptyList(), needsRepair = true),
         ).forEach { PcCard(it, {}, {}, {}, {}, {}, {}) }
     }
 }

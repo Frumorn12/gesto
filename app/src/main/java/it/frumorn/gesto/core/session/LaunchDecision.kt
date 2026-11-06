@@ -4,9 +4,11 @@ import it.frumorn.gesto.core.model.TrustedHost
 
 /**
  * The PC to reconnect to when the app opens: the one used most recently (the first of the list on
- * a tie), null when no PC is paired.
+ * a tie), null when no PC is paired. A PC that no longer knows this phone is skipped: it would
+ * only refuse.
  */
-fun launchTarget(hosts: List<TrustedHost>): TrustedHost? = hosts.maxByOrNull { it.lastConnectedAt }
+fun launchTarget(hosts: List<TrustedHost>): TrustedHost? =
+    hosts.filterNot { it.needsRepair }.maxByOrNull { it.lastConnectedAt }
 
 /**
  * True for an address on the home network: IPv4 private (10/8, 172.16/12, 192.168/16) or

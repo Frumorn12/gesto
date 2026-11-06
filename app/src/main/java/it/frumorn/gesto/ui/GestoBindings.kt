@@ -173,6 +173,7 @@ fun rememberGestoActions(viewModel: GestoViewModel): GestoActions = remember(vie
             onResume = viewModel::resumeSession,
             onDisconnect = viewModel::disconnect,
             onWake = viewModel::wake,
+            onRepair = viewModel::repairHost,
             onRename = viewModel::rename,
             onForget = viewModel::forget,
             onAddPc = viewModel::startAddPc,
@@ -312,6 +313,7 @@ internal fun GestoUiState.toHomeState(): HomeUiState = HomeUiState(
             canWake = !connected && presence == Presence.Offline && host.macAddresses.isNotEmpty(),
             // An Offline PC shows none: its capabilities are from a reply that is now old.
             chips = if (presence == Presence.Offline) emptyList() else pcChips(seen, if (connected) capabilities else null),
+            needsRepair = host.needsRepair && !connected,
         )
     },
 )

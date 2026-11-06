@@ -132,6 +132,7 @@ private val NoticeAction.label: Int
         NoticeAction.Retry -> R.string.action_retry
         NoticeAction.OpenPcs -> R.string.nav_your_pcs
         NoticeAction.UseCode -> R.string.action_use_code
+        NoticeAction.AddAgain -> R.string.action_add_again
     }
 
 /**

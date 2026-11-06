@@ -23,6 +23,7 @@ object TrustedHostCodec {
                 .put("lastConnectedAt", host.lastConnectedAt)
                 .put("macAddresses", JSONArray(host.macAddresses))
             host.displayName?.let { item.put("displayName", it) }
+            if (host.needsRepair) item.put("needsRepair", true)
             array.put(item)
         }
         return array.toString()
@@ -44,6 +45,7 @@ object TrustedHostCodec {
                 // isNull is also true when the key is missing (a list saved before renaming existed).
                 displayName = if (item.isNull("displayName")) null else item.getString("displayName").ifBlank { null },
                 macAddresses = item.optJSONArray("macAddresses").toStringList(),
+                needsRepair = item.optBoolean("needsRepair", false),
             )
         }
     }

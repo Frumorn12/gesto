@@ -156,6 +156,8 @@ data class HomeActions(
     val onResume: () -> Unit = {},
     val onDisconnect: () -> Unit = {},
     val onWake: (String) -> Unit = {},
+    /** "Add again" on a PC that no longer knows this phone. */
+    val onRepair: (String) -> Unit = {},
     val onRename: (id: String, name: String) -> Unit = { _, _ -> },
     val onForget: (String) -> Unit = {},
     val onAddPc: () -> Unit = {},

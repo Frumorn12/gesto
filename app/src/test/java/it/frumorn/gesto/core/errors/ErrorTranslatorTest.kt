@@ -1,6 +1,7 @@
 package it.frumorn.gesto.core.errors
 
 import it.frumorn.gesto.R
+import it.frumorn.gesto.core.model.NoticeAction
 import it.frumorn.gesto.core.network.GestoApiException
 import it.frumorn.gesto.ui.text.UiText
 import java.net.ConnectException
@@ -50,5 +51,28 @@ class ErrorTranslatorTest {
         assertTrue(ErrorTranslator.isInputApprovalMissing(notApproved))
         assertFalse(ErrorTranslator.isInputApprovalMissing(GestoApiException("command_failed", "Text input rejected", true)))
         assertFalse(ErrorTranslator.isInputApprovalMissing(null))
+    }
+
+    @Test fun aRevokedPhoneIsToldToAddThePcAgainByName() =
+        assertEquals(
+            UiText.Res(R.string.error_phone_unpaired, listOf("Desk PC")),
+            ErrorTranslator.translate(api("auth_failed"), ErrorContext.Connecting, hostName = "Desk PC"),
+        )
+
+    @Test fun aRevokedPhoneWithoutThePcNameSaysThisPc() =
+        assertEquals(UiText.Res(R.string.error_phone_unpaired_this_pc), t(api("auth_failed"), ErrorContext.Connecting))
+
+    @Test fun aPcThatCannotReadItsPhonesIsBusy() {
+        assertEquals(UiText.Res(R.string.error_pc_busy), t(api("auth_store_failed"), ErrorContext.Connecting))
+        assertEquals(UiText.Res(R.string.error_pc_busy), t(api("pairing_store_failed"), ErrorContext.Pairing))
+    }
+
+    @Test fun onlyARevokedPhoneIsOfferedToAddThePcAgain() {
+        assertTrue(ErrorTranslator.isDeviceRevoked(api("auth_failed")))
+        assertEquals(NoticeAction.AddAgain, ErrorTranslator.connectAction(api("auth_failed")))
+        assertEquals(NoticeAction.Retry, ErrorTranslator.connectAction(api("unauthenticated")))
+        assertEquals(NoticeAction.Retry, ErrorTranslator.connectAction(api("auth_store_failed")))
+        assertEquals(NoticeAction.Retry, ErrorTranslator.connectAction(SocketTimeoutException()))
+        assertEquals(NoticeAction.Retry, ErrorTranslator.connectAction(null))
     }
 }
