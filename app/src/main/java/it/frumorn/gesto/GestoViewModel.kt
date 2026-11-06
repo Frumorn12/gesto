@@ -1315,9 +1315,11 @@ class GestoViewModel(
         handledInvitePayload = null
         val previous = _state.value.connectedHost
         if (previous != null && previous.fingerprint != paired.fingerprint) {
-            // The session with the other PC lost its channel to this one.
+            // The session with the other PC lost its channel to this one, and nothing of it may
+            // reach this PC: not its queued input, not the screen source it was streaming.
             reconnectJob?.cancel()
             clearQueuedInput()
+            resetSessionState()
         }
         val previousName = store.load().firstOrNull { it.fingerprint == paired.fingerprint }?.displayName
         val trusted = paired.copy(displayName = previousName)
@@ -1501,16 +1503,7 @@ class GestoViewModel(
     private fun performDisconnect(cancelReconnect: Boolean) {
         Log.i(TAG, "connection_state=disconnected user_requested=$cancelReconnect")
         if (cancelReconnect) reconnectJob?.cancel()
-        stopScreenStream()
-        interactionKeepAliveJob?.cancel()
-        interactionEndJob?.cancel()
-        activeInteractionSessionId = 0L
-        // The next session decides the touchpad hints and the button's pulse again, and the
-        // Automatic quality starts again from its best rung.
-        touchpadHintsDecided = false
-        quickMenuPulseDecided = false
-        autoQuality.reset()
-        pointerCarry.reset()
+        resetSessionState()
         savedStateHandle["connectedHostId"] = null
         savedStateHandle["screen"] = null
         // A lost link only moves the user out of the session; Settings or Add a PC stay put.
@@ -1522,27 +1515,29 @@ class GestoViewModel(
                 connectedHost = null,
                 status = "Disconnected",
                 reconnecting = false,
-                latencyMs = null,
-                remoteInputSessionActive = false,
-                remoteInputBacklog = 0,
-                touchpadHints = false,
                 externalInputStatus = externalInputSummary(it.externalInputDevices),
-                screenSources = emptyList(),
-                selectedScreenSourceId = null,
-                screenStreamInfo = null,
-                videoWidth = null,
-                videoHeight = null,
-                screenStreaming = false,
-                screenConnectionState = RemoteScreenConnectionState.Idle,
-                quickMenuPulse = false,
-                autoQualityRung = 0,
-                screenStatus = "Screen stream idle",
-                screenError = null,
             )
         }
         clearQueuedInput()
         client.close()
         if (home) go(Screen.Home)
+    }
+
+    /**
+     * Forgets what belonged to the session with the last PC: its stream, its screens and the one
+     * picked among them, the Automatic quality's steps, the sub-pixel moves left over, the hints
+     * already decided. The next session (with this PC or another) starts from scratch.
+     */
+    private fun resetSessionState() {
+        stopScreenStream()
+        interactionKeepAliveJob?.cancel()
+        interactionEndJob?.cancel()
+        activeInteractionSessionId = 0L
+        touchpadHintsDecided = false
+        quickMenuPulseDecided = false
+        autoQuality.reset()
+        pointerCarry.reset()
+        _state.update { it.withoutSession() }
     }
 
     /** Forgets the paired PC with [id], closing the session first if it is the one connected. */
@@ -1837,7 +1832,6 @@ class GestoViewModel(
                     screenError = null,
                 )
             }
-            val selected = _state.value.selectedScreenSourceId
             val settings = _state.value.streamingSettings
             streamShownAtMs = 0L
 
@@ -1859,19 +1853,31 @@ class GestoViewModel(
                         }
                         delay(500L * attempt)
                     }
-                    val streamInfo = client.startScreenStream(
-                        sourceId = selected,
-                        maxFps = settings.maxFps,
-                        jpegQuality = settings.jpegQuality,
-                        maxWidth = settings.maxWidth,
-                        maxHeight = settings.maxHeight,
-                    )
+                    // Only a screen the user picked in Advanced is asked for; otherwise the PC
+                    // streams the one it remembers, which survives a monitor being unplugged.
+                    val selected = _state.value.selectedScreenSourceId
+                    val streamInfo = try {
+                        client.startScreenStream(
+                            sourceId = selected,
+                            maxFps = settings.maxFps,
+                            jpegQuality = settings.jpegQuality,
+                            maxWidth = settings.maxWidth,
+                            maxHeight = settings.maxHeight,
+                        )
+                    } catch (e: GestoApiException) {
+                        // The screen picked is gone (unplugged, or another PC's): the next try
+                        // leaves the choice to the PC.
+                        if (selected != null && e.isScreenSourceGone()) {
+                            Log.w(TAG, "screen_source_gone source=$selected")
+                            _state.update { it.copy(selectedScreenSourceId = null) }
+                        }
+                        throw e
+                    }
                     info = streamInfo
                     Log.i(TAG, "screen_stream_start attempt=$attempt session=${streamInfo.sessionId} source=${streamInfo.source.id} port=${streamInfo.streamPort} actualFps=${streamInfo.actualFps} actualQuality=${streamInfo.actualQuality}")
                     _state.update {
                         it.copy(
                             screenStreamInfo = streamInfo,
-                            selectedScreenSourceId = streamInfo.source.id,
                             screenConnectionState = transitionScreenSession(RemoteScreenSessionEvent.Negotiated),
                             screenStatus = "Connecting ${streamInfo.source.backend} stream...",
                             screenError = null,
@@ -2752,6 +2758,35 @@ internal fun shouldAutoStartStream(
     appStarted: Boolean,
 ): Boolean = appStarted && screen == Screen.Display && connectionState == ConnectionState.Connected &&
     captureSupported && !streamWanted
+
+/** The PC has no screen source with the id asked for. */
+internal fun Throwable.isScreenSourceGone(): Boolean =
+    this is GestoApiException && message?.contains("Screen source not found", ignoreCase = true) == true
+
+/**
+ * This state without what belonged to the session with the last PC: its latency, its pending
+ * input, its stream and screens (the one picked among them too), the Automatic quality's step and
+ * the hints of the session. What the PC is and what the user set stays.
+ */
+internal fun GestoUiState.withoutSession(): GestoUiState = copy(
+    latencyMs = null,
+    remoteInputSessionActive = false,
+    remoteInputBacklog = 0,
+    touchpadHints = false,
+    screenSources = emptyList(),
+    screenSourcesLoading = false,
+    selectedScreenSourceId = null,
+    screenStreamInfo = null,
+    videoWidth = null,
+    videoHeight = null,
+    screenStreaming = false,
+    screenConnectionState = RemoteScreenConnectionState.Idle,
+    screenStreamStats = ScreenStreamStats(),
+    quickMenuPulse = false,
+    autoQualityRung = 0,
+    screenStatus = "Screen stream idle",
+    screenError = null,
+)
 
 /** Scanning for hosts never changes the state of a session that is held: only an idle app moves. */
 internal fun GestoUiState.stateDuringDiscovery(idle: ConnectionState): ConnectionState =
