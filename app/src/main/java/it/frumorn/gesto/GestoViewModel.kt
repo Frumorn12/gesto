@@ -1685,12 +1685,12 @@ class GestoViewModel(
         for (candidate in connectAddresses(host, _state.value.scannedHosts)) {
             try {
                 val result = client.connect(candidate)
-                if (candidate.address != host.address || candidate.port != host.port) {
-                    Log.i(TAG, "connect_moved host=${host.hostName} address=${candidate.address}:${candidate.port}")
-                    store.update(host.id) { it.copy(address = candidate.address, port = candidate.port) }
-                    refreshStoredHosts()
-                }
-                return candidate to result
+                if (candidate.address == host.address && candidate.port == host.port) return host to result
+                Log.i(TAG, "connect_moved host=${host.hostName} address=${candidate.address}:${candidate.port}")
+                // The stored entry, so a rename made meanwhile is kept.
+                val moved = store.update(host.id) { it.copy(address = candidate.address, port = candidate.port) } ?: candidate
+                refreshStoredHosts()
+                return moved to result
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
