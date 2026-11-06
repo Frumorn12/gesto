@@ -1,7 +1,16 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// The release key lives outside the repository, in ~/.config/gesto/firma.properties
+// (storeFile, storePassword, keyAlias, keyPassword). Without that file the release build
+// comes out unsigned.
+val firma = File(System.getProperty("user.home"), ".config/gesto/firma.properties")
+    .takeIf { it.isFile }
+    ?.let { f -> Properties().apply { f.inputStream().use { load(it) } } }
 
 android {
     namespace = "it.frumorn.gesto"
@@ -15,6 +24,21 @@ android {
         versionName = "0.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (firma != null) create("release") {
+            storeFile = File(firma.getProperty("storeFile"))
+            storePassword = firma.getProperty("storePassword")
+            keyAlias = firma.getProperty("keyAlias")
+            keyPassword = firma.getProperty("keyPassword")
+        }
+    }
+
+    buildTypes {
+        release {
+            if (firma != null) signingConfig = signingConfigs.getByName("release")
+        }
     }
 
     buildFeatures {
