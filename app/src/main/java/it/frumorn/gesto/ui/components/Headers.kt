@@ -25,20 +25,6 @@ import it.frumorn.gesto.R
 import it.frumorn.gesto.ui.theme.GestoPreviewSurface
 import it.frumorn.gesto.ui.theme.GestoTheme
 
-/** Screen title + one-line explanation, repeated at the top of every content screen. */
-@Composable
-fun SectionHeader(title: String, subtitle: String, modifier: Modifier = Modifier) {
-    Column(modifier.padding(vertical = GestoTheme.spacing.md)) {
-        Text(title, style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(GestoTheme.spacing.xs))
-        Text(
-            subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
 /**
  * Top bar of the screens outside a session: a back arrow (or, on the PCs list, the Gesto mark and
  * name), optionally a centred [title] and the settings entry, and the error strip of the old
@@ -110,7 +96,6 @@ fun GestoPageBar(
 private fun GestoPageBarPreviewHome() = GestoPreviewSurface(darkTheme = false) {
     Column {
         GestoPageBar(onOpenSettings = {})
-        SectionHeader("Your PCs", "Pick the PC you want to control.")
     }
 }
 
