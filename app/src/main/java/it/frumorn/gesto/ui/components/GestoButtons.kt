@@ -33,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.text.style.TextOverflow
 import it.frumorn.gesto.ui.theme.GestoTheme
 
 // Material 3 buttons default to pills and ignore MaterialTheme.shapes; these wrappers apply the
@@ -52,7 +53,7 @@ private fun ButtonLabel(text: String, icon: ImageVector?) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
         if (text.isNotEmpty()) Spacer(Modifier.width(IconGap))
     }
-    if (text.isNotEmpty()) Text(text, style = MaterialTheme.typography.labelLarge)
+    if (text.isNotEmpty()) Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 
 /** Filled primary button. With an empty [text] it shows only [icon]; give it a [description] then. */
@@ -152,7 +153,7 @@ fun GestoQuickTile(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(icon, contentDescription = null, modifier = Modifier.size(GestoTheme.spacing.menuIconSize))
-            Text(text, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+            Text(text, style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
         }
     }
     val sized = modifier.height(height).alpha(if (enabled) 1f else DisabledAlpha)

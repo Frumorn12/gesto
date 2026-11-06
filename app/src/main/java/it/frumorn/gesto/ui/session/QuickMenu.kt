@@ -350,6 +350,7 @@ private fun QuickMenuRow(
                 style = MaterialTheme.typography.labelMedium,
                 color = menu.primary,
                 maxLines = 1,
+                softWrap = false,
                 modifier = Modifier
                     .background(menu.primaryContainer)
                     .padding(horizontal = spacing.sm, vertical = spacing.hairline),

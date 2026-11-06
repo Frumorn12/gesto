@@ -82,7 +82,7 @@ object GestoIcons {
     val Save: ImageVector by lazy { lineIcon("Save", "M4 4h13l3 3v13H4z", rect(8, 4, 8, 5), rect(7, 13, 10, 7)) }
     val Terminal: ImageVector by lazy { lineIcon("Terminal", rect(3, 4, 18, 16), "M7 9l3 3-3 3M13 15h4") }
     val Launcher: ImageVector by lazy { lineIcon("Launcher", "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z", "M16 16l5 5") }
-    val Escape: ImageVector by lazy { lineIcon("Escape", rect(3, 6, 18, 12), "M8 10l2 2-2 2M13 14h3") }
+    val Escape: ImageVector by lazy { lineIcon("Escape", rect(3, 5, 18, 14), "M15 9l-6 6M9 10v5h5") }
     val Lock: ImageVector by lazy { lineIcon("Lock", rect(5, 11, 14, 9), "M8 11V7a4 4 0 0 1 8 0v4") }
     val Moon: ImageVector by lazy { lineIcon("Moon", "M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z") }
     val Apps: ImageVector by lazy { lineIcon("Apps", rect(4, 4, 6, 6), rect(14, 4, 6, 6), rect(4, 14, 6, 6), "M14 17h6M17 14v6") }

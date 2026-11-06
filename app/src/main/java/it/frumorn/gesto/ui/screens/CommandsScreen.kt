@@ -111,29 +111,49 @@ fun CommandsScreen(
         }
         Section(R.string.commands_volume, state.volumeSupported) {
             Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
-                GestoTileButton(
-                    stringResource(R.string.commands_quieter), { actions.onVolume("down") },
-                    Modifier.weight(1f).clickHeight(), state.volumeSupported, GestoIcons.Minus,
+                GestoQuickTile(
+                    text = stringResource(R.string.commands_quieter),
+                    icon = GestoIcons.Minus,
+                    onClick = { actions.onVolume("down") },
+                    modifier = Modifier.weight(1f),
+                    enabled = state.volumeSupported,
+                    height = GestoTheme.spacing.clickButtonHeight,
                 )
-                GestoTileButton(
-                    stringResource(R.string.commands_mute), { actions.onVolume("mute_toggle") },
-                    Modifier.weight(1f).clickHeight(), state.volumeSupported, GestoIcons.Mute,
+                GestoQuickTile(
+                    text = stringResource(R.string.commands_mute),
+                    icon = GestoIcons.Mute,
+                    onClick = { actions.onVolume("mute_toggle") },
+                    modifier = Modifier.weight(1f),
+                    enabled = state.volumeSupported,
+                    height = GestoTheme.spacing.clickButtonHeight,
                 )
-                GestoTileButton(
-                    stringResource(R.string.commands_louder), { actions.onVolume("up") },
-                    Modifier.weight(1f).clickHeight(), state.volumeSupported, GestoIcons.Plus,
+                GestoQuickTile(
+                    text = stringResource(R.string.commands_louder),
+                    icon = GestoIcons.Plus,
+                    onClick = { actions.onVolume("up") },
+                    modifier = Modifier.weight(1f),
+                    enabled = state.volumeSupported,
+                    height = GestoTheme.spacing.clickButtonHeight,
                 )
             }
         }
         Section(R.string.commands_brightness, state.brightnessSupported) {
             Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
-                GestoTileButton(
-                    stringResource(R.string.commands_dimmer), { actions.onBrightness("down") },
-                    Modifier.weight(1f).clickHeight(), state.brightnessSupported, GestoIcons.Minus,
+                GestoQuickTile(
+                    text = stringResource(R.string.commands_dimmer),
+                    icon = GestoIcons.Minus,
+                    onClick = { actions.onBrightness("down") },
+                    modifier = Modifier.weight(1f),
+                    enabled = state.brightnessSupported,
+                    height = GestoTheme.spacing.clickButtonHeight,
                 )
-                GestoTileButton(
-                    stringResource(R.string.commands_brighter), { actions.onBrightness("up") },
-                    Modifier.weight(1f).clickHeight(), state.brightnessSupported, GestoIcons.Plus,
+                GestoQuickTile(
+                    text = stringResource(R.string.commands_brighter),
+                    icon = GestoIcons.Plus,
+                    onClick = { actions.onBrightness("up") },
+                    modifier = Modifier.weight(1f),
+                    enabled = state.brightnessSupported,
+                    height = GestoTheme.spacing.clickButtonHeight,
                 )
             }
         }
