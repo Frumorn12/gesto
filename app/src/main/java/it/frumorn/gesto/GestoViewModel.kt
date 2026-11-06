@@ -18,6 +18,7 @@ import it.frumorn.gesto.core.model.ConnectionState
 import it.frumorn.gesto.core.model.DiscoveredHost
 import it.frumorn.gesto.core.model.Notice
 import it.frumorn.gesto.core.model.NoticeAction
+import it.frumorn.gesto.core.model.shouldEmitNotice
 import it.frumorn.gesto.core.model.PointerButton
 import it.frumorn.gesto.core.model.RemoteScreenConnectionState
 import it.frumorn.gesto.core.model.ScreenSource
@@ -42,6 +43,7 @@ import it.frumorn.gesto.core.storage.SettingsRepository
 import it.frumorn.gesto.core.storage.TrustedHostStore
 import it.frumorn.gesto.ui.navigation.BackAction
 import it.frumorn.gesto.ui.navigation.backAction
+import it.frumorn.gesto.ui.navigation.reachableScreen
 import it.frumorn.gesto.ui.theme.ThemeMode
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
@@ -160,7 +162,6 @@ class GestoViewModel(
         const val HEALTH_PING_INTERVAL_MS = 5_000L
         const val HEALTH_PING_IDLE_MS = 1_000L
         const val HEALTH_PING_MAX_FAILURES = 2
-        const val NOTICE_DEDUPE_MS = 3_000L
         const val LAUNCH_TIMEOUT_MS = 6_000L
     }
 
@@ -196,7 +197,7 @@ class GestoViewModel(
     private val reconnectPolicy = ReconnectPolicy()
     private var reconnectJob: Deferred<Boolean>? = null
     private var lastInputAtMs = 0L
-    private var lastNoticeText: UiText? = null
+    private var lastNotice: Notice? = null
     private var lastNoticeAtMs = 0L
     /** Id of the launch attempt the app is still waiting for; 0 when none. */
     private var liveLaunch = 0L
@@ -266,10 +267,10 @@ class GestoViewModel(
             it.copy(
                 connectedHost = host,
                 connectionState = ConnectionState.Connecting,
-                screen = screen,
                 status = "Reconnecting to ${host.hostName}...",
             )
         }
+        go(screen)
         viewModelScope.launch {
             runCatching { client.connect(host) }
                 .onSuccess { capabilities ->
@@ -291,13 +292,10 @@ class GestoViewModel(
                         it.copy(
                             connectionState = ConnectionState.Disconnected,
                             connectedHost = null,
-                            screen = Screen.Home,
-                            keyboardOpen = false,
-                            quickMenuOpen = false,
                             status = "Ready",
-                            error = null,
                         )
                     }
+                    go(Screen.Home)
                     savedStateHandle["connectedHostId"] = null
                     savedStateHandle["screen"] = null
                     emitNotice(Notice(connectFailureText(host, throwable), NoticeAction.Retry))
@@ -316,16 +314,15 @@ class GestoViewModel(
         val attempt = ++launchCounter
         liveLaunch = attempt
         retryHostId = host.id
+        // A new attempt deserves its own answer, even if it is the same as the last one.
+        lastNotice = null
         Log.i(TAG, "launch_connect host=${host.hostName} address=${host.address}:${host.port}")
+        go(Screen.Launch)
         _state.update {
             it.copy(
-                screen = Screen.Launch,
                 launchHost = host,
                 connectionState = ConnectionState.Connecting,
-                keyboardOpen = false,
-                quickMenuOpen = false,
                 status = "Connecting to ${host.hostName}...",
-                error = null,
             )
         }
         viewModelScope.launch {
@@ -379,13 +376,12 @@ class GestoViewModel(
         Log.w(TAG, "launch_failed host=${host.hostName}", error)
         _state.update {
             it.copy(
-                screen = Screen.Home,
                 launchHost = null,
                 connectionState = ConnectionState.Disconnected,
                 status = "Ready",
-                error = null,
             )
         }
+        go(Screen.Home)
         emitNotice(Notice(connectFailureText(host, error), NoticeAction.Retry))
     }
 
@@ -425,6 +421,7 @@ class GestoViewModel(
     /** Connects again to the PC of the last failed or lost connection (the notice's "Try again"). */
     fun retryLastConnection() {
         if (_state.value.connectedHost != null) return
+        lastNotice = null
         val host = retryHostId?.let { id -> store.load().find { it.id == id } } ?: return
         launchConnect(host)
     }
@@ -440,7 +437,13 @@ class GestoViewModel(
         }
     }
 
-    fun go(screen: Screen) {
+    /**
+     * The only place the screen changes: it closes the keyboard sheet and the quick menu, stops
+     * the screen stream when leaving Display, remembers the session mode and where Settings was
+     * opened from. A session screen without a connected PC becomes the PCs list.
+     */
+    fun go(requested: Screen) {
+        val screen = reachableScreen(requested, connected = _state.value.connectedHost != null)
         if (screen != Screen.Launch) abandonLaunch()
         val wasCapturingExternalInput = shouldCaptureExternalInput(_state.value)
         val previous = _state.value.screen
@@ -499,11 +502,8 @@ class GestoViewModel(
             BackAction.CloseQuickMenu -> setQuickMenuOpen(false)
             BackAction.OpenQuickMenu -> setQuickMenuOpen(true)
             is BackAction.AddPcStepTo -> setAddPcStep(action.step)
-            is BackAction.GoTo -> {
-                // Settings opened from a session that has since ended: there is nothing to go back to.
-                val target = if (action.screen.isSession && s.connectedHost == null) Screen.Home else action.screen
-                go(target)
-            }
+            // Settings opened from a session that has since ended lands on Home (see go()).
+            is BackAction.GoTo -> go(action.screen)
             BackAction.ExitApp -> return false
         }
         return true
@@ -531,20 +531,19 @@ class GestoViewModel(
         }
         runCatching { GestoInvite.parse(raw) }
             .onSuccess { invite ->
-                abandonLaunch()
                 handledInvitePayload = raw
                 pendingInvite = invite
                 Log.i(
                     TAG,
                     "qr_invite_loaded host=${invite.hostName} endpoints=${invite.endpoints.joinToString { "${it.route}:${it.address}:${it.port}" }} route=${invite.route} policy=${invite.policy} publicPairingAllowed=${invite.publicPairingAllowed} expires=${invite.expiresAt}",
                 )
+                go(Screen.AddPc)
                 _state.update {
                     it.copy(
                         selectedHost = invite.toDiscoveredHost(),
                         pairingCode = invite.pairingCode,
                         manualAddress = invite.address,
                         manualPort = invite.port.toString(),
-                        screen = Screen.AddPc,
                         addPcStep = AddPcStep.Code,
                         status = "Loaded ${invite.route} invite for ${invite.hostName.ifBlank { invite.address }}",
                         error = null,
@@ -554,10 +553,9 @@ class GestoViewModel(
             }
             .onFailure { throwable ->
                 Log.w(TAG, "qr_invite_failed message=${throwable.message}", throwable)
-                abandonLaunch()
+                go(Screen.AddPc)
                 _state.update {
                     it.copy(
-                        screen = Screen.AddPc,
                         addPcStep = AddPcStep.Search,
                         error = throwable.message ?: "Could not parse Gesto invite",
                     )
@@ -776,12 +774,10 @@ class GestoViewModel(
     }
 
     fun startDiscovery() {
-        abandonLaunch()
+        go(Screen.AddPc)
         _state.update {
             it.copy(
-                screen = Screen.AddPc,
                 addPcStep = AddPcStep.Search,
-                previousScreen = null,
                 connectionState = it.stateDuringDiscovery(ConnectionState.Discovering),
                 status = "Scanning LAN...",
                 error = null,
@@ -804,9 +800,8 @@ class GestoViewModel(
     }
 
     fun selectHost(host: DiscoveredHost) {
-        _state.update {
-            it.copy(selectedHost = host, screen = Screen.AddPc, addPcStep = AddPcStep.Code, pairingCode = "", error = null)
-        }
+        go(Screen.AddPc)
+        _state.update { it.copy(selectedHost = host, addPcStep = AddPcStep.Code, pairingCode = "") }
     }
 
     fun useManualHost() {
@@ -966,16 +961,13 @@ class GestoViewModel(
         activeInteractionSessionId = 0L
         savedStateHandle["connectedHostId"] = null
         savedStateHandle["screen"] = null
+        // A lost link only moves the user out of the session; Settings or Add a PC stay put.
+        val current = _state.value.screen
+        val home = cancelReconnect || current.isSession || current == Screen.Launch
         _state.update {
-            // A lost link only moves the user out of the session; Settings or Add a PC stay put.
-            val home = cancelReconnect || it.screen.isSession || it.screen == Screen.Launch
             it.copy(
                 connectionState = ConnectionState.Disconnected,
                 connectedHost = null,
-                screen = if (home) Screen.Home else it.screen,
-                previousScreen = if (home) null else it.previousScreen,
-                keyboardOpen = false,
-                quickMenuOpen = false,
                 status = "Disconnected",
                 reconnecting = false,
                 latencyMs = null,
@@ -998,6 +990,7 @@ class GestoViewModel(
         }
         clearQueuedInput()
         client.close()
+        if (home) go(Screen.Home)
     }
 
     fun removeTrustedHost(id: String) {
@@ -1499,11 +1492,11 @@ class GestoViewModel(
 
     private fun currentPort(): Int = _state.value.connectedHost?.port ?: 47771
 
-    /** Emits a notice, skipping an identical one that was just shown (e.g. per-keystroke failures). */
+    /** Emits a notice, skipping an identical one that was just shown (see [shouldEmitNotice]). */
     private fun emitNotice(notice: Notice) {
         val now = System.currentTimeMillis()
-        if (notice.text == lastNoticeText && now - lastNoticeAtMs < NOTICE_DEDUPE_MS) return
-        lastNoticeText = notice.text
+        if (!shouldEmitNotice(lastNotice, lastNoticeAtMs, notice, now)) return
+        lastNotice = notice
         lastNoticeAtMs = now
         _notices.trySend(notice)
     }
@@ -1894,7 +1887,11 @@ class GestoViewModel(
         interactionEndJob?.cancel()
         screenStreamJob?.cancel()
         videoSession.release()
-        client.close()
+        // A launch connect may still be blocked on its socket: stop waiting for it, and make the
+        // client drop whatever channel it opens from now on.
+        liveLaunch = 0L
+        launchTimeoutJob?.cancel()
+        client.shutdown()
         super.onCleared()
     }
 }

@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -207,14 +208,21 @@ private fun SessionDock(state: SessionUiState, actions: SessionActions, modifier
         SessionDockItems.forEach { item ->
             val mode = item.mode
             val pressed = if (mode == null) state.keyboardOpen else mode == state.mode && !state.keyboardOpen
+            // The three modes are tabs; Keyboard opens and closes the sheet, so it is a switch.
+            val interaction = if (mode == null) {
+                Modifier.toggleable(
+                    value = state.keyboardOpen,
+                    role = Role.Switch,
+                    onValueChange = actions.onSetKeyboardOpen,
+                )
+            } else {
+                Modifier.selectable(selected = pressed, role = Role.Tab, onClick = { actions.onSelectMode(mode) })
+            }
             DockButton(
                 label = stringResource(item.label),
                 icon = item.icon,
                 pressed = pressed,
-                onClick = {
-                    if (mode == null) actions.onSetKeyboardOpen(!state.keyboardOpen) else actions.onSelectMode(mode)
-                },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).then(interaction),
             )
         }
     }
@@ -225,14 +233,10 @@ private fun DockButton(
     label: String,
     icon: ImageVector,
     pressed: Boolean,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val color = if (pressed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-    Box(
-        modifier.selectable(selected = pressed, role = Role.Tab, onClick = onClick),
-        contentAlignment = Alignment.TopCenter,
-    ) {
+    Box(modifier, contentAlignment = Alignment.TopCenter) {
         if (pressed) {
             // The active item marks the bar's top edge, over the 1 dp line.
             Box(

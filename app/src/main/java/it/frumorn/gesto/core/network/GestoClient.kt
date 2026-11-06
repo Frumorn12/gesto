@@ -27,6 +27,9 @@ class GestoClient {
     private val transportMutex = Mutex()
     private val oneWayResponseIds = ArrayDeque<String>()
     private var channel: SecureChannel? = null
+    /** Guards [channel] replacement against [shutdown] from another thread. */
+    private val channelLock = Any()
+    private var shutDown = false
 
     suspend fun pair(
         address: String,
@@ -65,9 +68,7 @@ class GestoClient {
             ch.close()
             throw e
         }
-        channel?.close()
-        oneWayResponseIds.clear()
-        channel = ch
+        adopt(ch)
         host to capabilities
     } }
 
@@ -88,9 +89,7 @@ class GestoClient {
             ch.close()
             throw e
         }
-        channel?.close()
-        oneWayResponseIds.clear()
-        channel = ch
+        adopt(ch)
         capabilities
     } }
 
@@ -214,6 +213,26 @@ class GestoClient {
             "set_desktop_audio_mute",
             JSONObject().put("session_id", sessionId).put("muted", muted),
         )
+    }
+
+    /**
+     * Makes [ch] the live channel, closing the previous one. After [shutdown] a connect or pair
+     * that was still running on its socket closes its channel instead of keeping it open.
+     */
+    private fun adopt(ch: SecureChannel) = synchronized(channelLock) {
+        if (shutDown) {
+            ch.close()
+            throw IllegalStateException("Gesto client shut down")
+        }
+        channel?.close()
+        oneWayResponseIds.clear()
+        channel = ch
+    }
+
+    /** Closes the client for good (the ViewModel is going away). */
+    fun shutdown() = synchronized(channelLock) {
+        shutDown = true
+        close()
     }
 
     fun close() {

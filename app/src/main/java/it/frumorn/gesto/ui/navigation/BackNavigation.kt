@@ -2,6 +2,7 @@ package it.frumorn.gesto.ui.navigation
 
 import it.frumorn.gesto.AddPcStep
 import it.frumorn.gesto.Screen
+import it.frumorn.gesto.isSession
 
 /** What the system back button does in a given state. */
 sealed interface BackAction {
@@ -39,3 +40,7 @@ fun backAction(
         Screen.Home, Screen.Launch -> BackAction.ExitApp
     }
 }
+
+/** A session screen needs a connected PC; without one the PCs list is shown instead. */
+fun reachableScreen(target: Screen, connected: Boolean): Screen =
+    if (target.isSession && !connected) Screen.Home else target

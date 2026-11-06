@@ -83,4 +83,16 @@ class BackNavigationTest {
             }
         }
     }
+
+    @Test fun session_screens_need_a_connected_pc() {
+        assertEquals(Screen.Home, reachableScreen(Screen.Display, connected = false))
+        assertEquals(Screen.Home, reachableScreen(Screen.Touchpad, connected = false))
+        assertEquals(Screen.Commands, reachableScreen(Screen.Commands, connected = true))
+    }
+
+    @Test fun other_screens_are_always_reachable() {
+        for (screen in listOf(Screen.Launch, Screen.Home, Screen.AddPc, Screen.Settings, Screen.Advanced, Screen.Diagnostics)) {
+            assertEquals(screen, reachableScreen(screen, connected = false))
+        }
+    }
 }
