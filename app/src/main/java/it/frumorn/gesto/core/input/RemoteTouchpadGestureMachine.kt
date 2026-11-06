@@ -258,7 +258,10 @@ class RemoteTouchpadGestureMachine(
         }
         val delta = centroid - current.lastCentroid
         state = GestureState.TwoFingerScroll(centroid, ids)
-        return if (delta.isSignificant(moveThresholdPx)) listOf(RemoteGestureAction.Scroll(delta.dx, delta.dy)) else emptyList()
+        if (!delta.isSignificant(moveThresholdPx)) return emptyList()
+        // Only a scroll that really moved needs finishing; a two-finger tap is just a right click.
+        sawScroll = true
+        return listOf(RemoteGestureAction.Scroll(delta.dx, delta.dy))
     }
 
     private fun updateRecovering(pointers: List<RemotePointer>): List<RemoteGestureAction> {
@@ -280,7 +283,6 @@ class RemoteTouchpadGestureMachine(
     }
 
     private fun enterScroll(pointers: List<RemotePointer>, reason: String): List<RemoteGestureAction> {
-        sawScroll = true
         movedBeyondTap = true
         return listOf(transitionTo(GestureState.TwoFingerScroll(centroidOf(pointers), pointers.idSet()), reason))
     }

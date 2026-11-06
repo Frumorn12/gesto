@@ -87,11 +87,36 @@ class RemoteTouchpadGestureMachineTest {
 
         gesture.begin(pointer(1, 10f, 10f), timeMillis = 0L)
         gesture.update(listOf(pointer(1, 10f, 10f), pointer(2, 30f, 10f)), timeMillis = 10L)
+        gesture.update(listOf(pointer(1, 10f, 25f), pointer(2, 30f, 25f)), timeMillis = 20L)
         val actions = gesture.cancel("test_cancel")
 
         assertTrue(actions.any { it == RemoteGestureAction.FinishScroll })
         assertTrue(actions.any { it is RemoteGestureAction.ModeChanged && it.to == RemoteGestureMode.GestureCancelled })
         assertEquals(RemoteGestureMode.Idle, gesture.mode)
+    }
+
+    @Test
+    fun twoFingerTapRightClicksWithoutFinishingAScroll() {
+        val gesture = RemoteTouchpadGestureMachine(tapSlopPx = 8f)
+
+        gesture.begin(pointer(1, 10f, 10f), timeMillis = 0L)
+        gesture.update(listOf(pointer(1, 10f, 10f), pointer(2, 30f, 10f)), timeMillis = 10L)
+        val actions = gesture.update(emptyList(), timeMillis = 60L)
+
+        assertEquals(listOf(RemoteGestureAction.RightClick), actions.filter { it !is RemoteGestureAction.ModeChanged })
+    }
+
+    @Test
+    fun scrollStillFinishesOnceFingersMoved() {
+        val gesture = RemoteTouchpadGestureMachine(tapSlopPx = 8f)
+
+        gesture.begin(pointer(1, 10f, 10f), timeMillis = 0L)
+        gesture.update(listOf(pointer(1, 10f, 10f), pointer(2, 30f, 10f)), timeMillis = 10L)
+        gesture.update(listOf(pointer(1, 10f, 40f), pointer(2, 30f, 40f)), timeMillis = 20L)
+        val actions = gesture.update(emptyList(), timeMillis = 30L)
+
+        assertTrue(actions.any { it == RemoteGestureAction.FinishScroll })
+        assertTrue(actions.none { it == RemoteGestureAction.RightClick })
     }
 
     @Test

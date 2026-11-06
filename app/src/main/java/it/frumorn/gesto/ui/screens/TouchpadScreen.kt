@@ -122,8 +122,10 @@ fun TouchpadScreen(
     }
 
     fun click(button: PointerButton) {
-        buzz(HapticFeedbackType.ContextClick)
-        currentActions.onPointerButton(button, ButtonState.Pressed)
+        // A click that was dropped (no link, input not approved) must not feel like it worked.
+        val sent = currentState.input == TouchpadInput.Ready &&
+            currentActions.onPointerButton(button, ButtonState.Pressed)
+        if (sent) buzz(HapticFeedbackType.ContextClick)
         currentActions.onPointerButton(button, ButtonState.Released)
     }
 
@@ -138,10 +140,7 @@ fun TouchpadScreen(
             RemoteGestureAction.FinishScroll -> currentActions.onScroll(0f, 0f, true)
             RemoteGestureAction.Click -> click(PointerButton.Left)
             RemoteGestureAction.RightClick -> click(PointerButton.Right)
-            RemoteGestureAction.ToggleKeyboard -> {
-                buzz(HapticFeedbackType.ContextClick)
-                currentActions.onToggleKeyboard()
-            }
+            RemoteGestureAction.ToggleKeyboard -> currentActions.onToggleKeyboard()
             RemoteGestureAction.DragStart -> {
                 buzz(HapticFeedbackType.LongPress)
                 currentActions.onPointerButton(PointerButton.Left, ButtonState.Pressed)

@@ -1452,14 +1452,15 @@ class GestoViewModel(
         return if (enqueueInput(RemoteInputCommand.PointerMove(sentX, sentY))) PointerDelta(sentX, sentY) else null
     }
 
-    fun pointerButton(button: PointerButton, state: ButtonState) {
+    /** Sends a button change; false when it was dropped (no link, legacy backend, queue full). */
+    fun pointerButton(button: PointerButton, state: ButtonState): Boolean {
         if (_state.value.capabilities.inputBackend == "hyprland-hyprctl") {
             if (state == ButtonState.Pressed) {
                 _state.update { it.copy(status = "Legacy Hyprland fallback moves only the pointer; update waypad-daemon for IPC clicks.") }
             }
-            return
+            return false
         }
-        enqueueInput(RemoteInputCommand.PointerButton(button, state))
+        return enqueueInput(RemoteInputCommand.PointerButton(button, state))
     }
 
     fun releasePointerButtons() {
@@ -2149,6 +2150,8 @@ class GestoViewModel(
                     client.pointerButton(PointerButton.Right, ButtonState.Released)
                     client.pointerButton(PointerButton.Middle, ButtonState.Released)
                 }
+                // Queued at the end of every touchpad gesture: what is left of a pixel is not carried into the next one.
+                pointerCarry.reset()
             }
             RemoteInputCommand.Ping -> {
                 Log.v(TAG, "transport_send type=ping")

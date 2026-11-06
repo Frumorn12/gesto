@@ -59,7 +59,8 @@ data class TouchpadActions(
     /** A finger move; returns the move sent to the PC (after speed and acceleration), or null. */
     val onPointerMove: (dx: Float, dy: Float) -> PointerDelta? = { _, _ -> null },
     val onScroll: (dx: Float, dy: Float, finish: Boolean) -> Unit = { _, _, _ -> },
-    val onPointerButton: (PointerButton, ButtonState) -> Unit = { _, _ -> },
+    /** A button change; false when it was dropped. */
+    val onPointerButton: (PointerButton, ButtonState) -> Boolean = { _, _ -> false },
     val onReleasePointerButtons: () -> Unit = {},
     val onBeginInteraction: () -> Long = { 0L },
     val onEndInteraction: (Long) -> Unit = {},
