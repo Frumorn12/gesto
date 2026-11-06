@@ -33,7 +33,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import it.frumorn.gesto.ui.theme.GestoTheme
 
 // Material 3 buttons default to pills and ignore MaterialTheme.shapes; these wrappers apply the
@@ -47,16 +50,48 @@ internal const val DisabledAlpha = 0.38f
 private fun Modifier.described(description: String?): Modifier =
     if (description == null) this else semantics { contentDescription = description }
 
+/** Smallest size a compact label shrinks to before it would not fit. */
+private val CompactLabelMinSize = 9.sp
+private val CompactLabelStep = 0.5.sp
+
+/**
+ * Padding of a compact button: a key of the keyboard sheet is about 42 dp wide on a 360 dp phone,
+ * and the default 24 dp on each side would leave no room for "Shift" or even "↑".
+ */
 @Composable
-private fun ButtonLabel(text: String, icon: ImageVector?) {
+private fun compactPadding(): PaddingValues = PaddingValues(horizontal = GestoTheme.spacing.hairline)
+
+@Composable
+private fun ButtonLabel(text: String, icon: ImageVector?, compact: Boolean = false) {
     if (icon != null) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
         if (text.isNotEmpty()) Spacer(Modifier.width(IconGap))
     }
-    if (text.isNotEmpty()) Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    if (text.isEmpty()) return
+    if (compact) {
+        // The whole label, always: it shrinks to fit the key instead of ending in "…".
+        val style = MaterialTheme.typography.labelLarge
+        Text(
+            text,
+            style = style,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = CompactLabelMinSize,
+                maxFontSize = style.fontSize,
+                stepSize = CompactLabelStep,
+            ),
+        )
+    } else {
+        Text(text, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
-/** Filled primary button. With an empty [text] it shows only [icon]; give it a [description] then. */
+/**
+ * Filled primary button. With an empty [text] it shows only [icon]; give it a [description] then.
+ * [compact] is for narrow keys: almost no side padding, and a label that shrinks rather than clips.
+ */
 @Composable
 fun GestoButton(
     text: String,
@@ -65,13 +100,15 @@ fun GestoButton(
     enabled: Boolean = true,
     icon: ImageVector? = null,
     description: String? = null,
+    compact: Boolean = false,
 ) {
     Button(
         onClick = onClick,
         modifier = modifier.described(description).defaultMinSize(minHeight = ButtonHeight).height(ButtonHeight),
         enabled = enabled,
         shape = MaterialTheme.shapes.extraSmall,
-    ) { ButtonLabel(text, icon) }
+        contentPadding = if (compact) compactPadding() else ButtonDefaults.ContentPadding,
+    ) { ButtonLabel(text, icon, compact) }
 }
 
 /** Transparent button with a 1 dp primary border. */
@@ -99,7 +136,7 @@ fun GestoOutlinedButton(
 
 /**
  * Neutral tile, like a key: 1 dp outlineVariant border on the page colour, primaryContainer while
- * pressed. For pads of equal actions (the touchpad's Left and Right).
+ * pressed. For pads of equal actions (the touchpad's Left and Right). [compact] as for [GestoButton].
  */
 @Composable
 fun GestoTileButton(
@@ -109,6 +146,7 @@ fun GestoTileButton(
     enabled: Boolean = true,
     icon: ImageVector? = null,
     description: String? = null,
+    compact: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -124,7 +162,8 @@ fun GestoTileButton(
         ),
         border = BorderStroke(GestoTheme.spacing.borderWidth, colors.outlineVariant),
         interactionSource = interaction,
-    ) { ButtonLabel(text, icon) }
+        contentPadding = if (compact) compactPadding() else ButtonDefaults.ContentPadding,
+    ) { ButtonLabel(text, icon, compact) }
 }
 
 /**

@@ -155,10 +155,11 @@ private fun KeyCap(
         contentDescription = description
         selected = on
     }
+    // Six keys share the row: compact, so every label shows whole down to a 360 dp phone.
     if (on) {
-        GestoButton(label, onClick, modifier.then(semantics))
+        GestoButton(label, onClick, modifier.then(semantics), compact = true)
     } else {
-        GestoTileButton(label, onClick, modifier.then(semantics))
+        GestoTileButton(label, onClick, modifier.then(semantics), compact = true)
     }
 }
 
