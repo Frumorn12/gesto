@@ -1,6 +1,6 @@
 # Gesto (ex Waypad): redesign e rinomina — design
 
-Proposta visiva approvata da Andrea il 05/11/2026: https://claude.ai/artifact/7TBgmRkxJbDdBhpRLavWWN
+Proposta visiva approvata da Andrea il 05/11/2026, in una pagina privata non inclusa nel repository
 (prototipo cliccabile, tabelle prima/dopo, gesti, idee da Moonlight/Sunshine, icona, piano).
 Questo documento ne riporta le decisioni in forma da costruire.
 
